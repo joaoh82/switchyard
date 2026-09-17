@@ -76,11 +76,17 @@ impl Capture {
     }
 }
 
-fn wait_for_exit(events: &Receiver<HostEvent>, id: &SessionId) -> pty_host::ExitInfo {
+fn wait_for_exit(
+    host: &PtyHost,
+    events: &Receiver<HostEvent>,
+    id: &SessionId,
+) -> pty_host::ExitInfo {
     loop {
+        // On a timeout, say what the host believes: a session still `Running` means the child
+        // never reported its exit; a small `idle_ms` means the PTY never went quiet.
         match events
             .recv_timeout(TIMEOUT)
-            .expect("timed out waiting for exit")
+            .unwrap_or_else(|_| panic!("timed out waiting for exit; host says {:?}", host.info(id)))
         {
             HostEvent::Exited { id: exited, exit } if &exited == id => return exit,
             HostEvent::Exited { .. } => {}
@@ -95,7 +101,7 @@ fn streams_output_then_reports_the_exit_code() {
     let capture = Capture::default();
     host.attach(&session.id, capture.sink()).unwrap();
 
-    let exit = wait_for_exit(&events, &session.id);
+    let exit = wait_for_exit(&host, &events, &session.id);
 
     // All output is delivered before `Exited` is announced.
     assert!(
@@ -117,7 +123,7 @@ fn a_late_viewer_gets_a_snapshot_of_what_it_missed() {
     let session = host
         .spawn(shell("echo printed-before-anyone-watched"))
         .unwrap();
-    wait_for_exit(&events, &session.id);
+    wait_for_exit(&host, &events, &session.id);
 
     let capture = Capture::default();
     host.attach(&session.id, capture.sink()).unwrap();
@@ -144,7 +150,7 @@ fn detached_viewers_stop_receiving() {
     let leaving = host.attach(&session.id, leaves.sink()).unwrap();
     host.detach(&session.id, leaving).unwrap();
 
-    wait_for_exit(&events, &session.id);
+    wait_for_exit(&host, &events, &session.id);
 
     assert!(stays.text().contains("second-part"));
     assert!(!leaves.text().contains("second-part"));
@@ -161,7 +167,7 @@ fn input_reaches_the_process() {
     host.write(&session.id, b"ping\n").unwrap();
 
     capture.wait_for("got:ping");
-    assert!(wait_for_exit(&events, &session.id).success);
+    assert!(wait_for_exit(&host, &events, &session.id).success);
 }
 
 #[cfg(unix)]
@@ -196,7 +202,7 @@ fn the_process_sees_the_terminal_size_and_resizes() {
             rows: 43
         }
     );
-    wait_for_exit(&events, &session.id);
+    wait_for_exit(&host, &events, &session.id);
 }
 
 #[test]
@@ -207,7 +213,7 @@ fn kill_ends_a_running_session() {
 
     host.kill(&session.id).unwrap();
 
-    assert!(!wait_for_exit(&events, &session.id).success);
+    assert!(!wait_for_exit(&host, &events, &session.id).success);
     assert!(matches!(
         host.kill(&session.id),
         Err(HostError::SessionExited(_))
@@ -263,7 +269,7 @@ fn the_plan_controls_the_environment() {
     let session = host.spawn(plan).unwrap();
     let capture = Capture::default();
     host.attach(&session.id, capture.sink()).unwrap();
-    wait_for_exit(&events, &session.id);
+    wait_for_exit(&host, &events, &session.id);
     assert!(
         capture.text().contains("[yes|xterm-256color|unset]"),
         "{:?}",

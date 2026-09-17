@@ -209,11 +209,18 @@ impl Session {
         if matches!(self.view().state, SessionState::Exited { .. }) {
             return Err(HostError::SessionExited(self.id.clone()));
         }
-        self.killer
+        let result = self
+            .killer
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .kill()?;
-        Ok(())
+            .kill();
+        // portable-pty 0.9 inverts the success check of `TerminateProcess` in its cloned killer,
+        // so on Windows a successful kill comes back as an error (carrying a stale OS error).
+        // The waiter thread is the source of truth either way: `Exited` follows a real kill.
+        if cfg!(windows) {
+            return Ok(());
+        }
+        Ok(result?)
     }
 
     fn pump(&self, rx: &Receiver<Msg>, events: &EventSink) {
@@ -262,16 +269,25 @@ impl Session {
             success: false,
             signal: None,
         });
-        {
+
+        // Announce the exit *before* tearing the PTY down, and tear it down on a thread of its
+        // own: on Windows, dropping the master calls `ClosePseudoConsole`, which can block until
+        // conhost has flushed and gone. Nothing may wait on that — least of all the exit event.
+        let (master, writer) = {
             let mut io = self.io();
-            io.writer = None;
-            io.master = None;
-        }
+            (io.master.take(), io.writer.take())
+        };
         self.view().state = SessionState::Exited { exit: exit.clone() };
         events(HostEvent::Exited {
             id: self.id.clone(),
             exit,
         });
+        let _ = thread::Builder::new()
+            .name(format!("pty-close-{}", &self.id.0[..8]))
+            .spawn(move || {
+                drop(writer);
+                drop(master);
+            });
     }
 
     fn deliver(&self, batch: &[u8]) {
