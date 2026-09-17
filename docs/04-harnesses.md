@@ -6,12 +6,12 @@ same shape because they all run in a terminal and all take roughly the same star
 
 ## What we need from a harness
 
-| Action | When |
-|--------|------|
-| **Start** with an initial prompt (plus model / effort) | New workspace, new session |
-| **Start** with no prompt | Empty composer, `local` |
-| **Resume** a previous session | App restarted, or harness exited and user clicks Resume |
-| **Fork** a previous session | User wants to branch the conversation |
+| Action                                                 | When                                                    |
+| ------------------------------------------------------ | ------------------------------------------------------- |
+| **Start** with an initial prompt (plus model / effort) | New workspace, new session                              |
+| **Start** with no prompt                               | Empty composer, `local`                                 |
+| **Resume** a previous session                          | App restarted, or harness exited and user clicks Resume |
+| **Fork** a previous session                            | User wants to branch the conversation                   |
 
 ## Definition
 
@@ -40,14 +40,14 @@ session_id_mode  = "assigned"          # "assigned" | "latest-in-cwd"
 [harness.env]                          # optional extra environment
 ```
 
-The user's description of the reference app's settings maps directly: *label*, *command*,
-*prompt-only args* → `prompt_args`, *resume args*, *fork args*, *prompt transport*, *restore
-defaults*. `model_args` / `effort_args` are our addition so the composer's pickers work without
+The user's description of the reference app's settings maps directly: _label_, _command_,
+_prompt-only args_ → `prompt_args`, _resume args_, _fork args_, _prompt transport_, _restore
+defaults_. `model_args` / `effort_args` are our addition so the composer's pickers work without
 every harness needing hand-written templates.
 
 ### Templating rules
 
-- Args are an **array**; each element is one argv entry. Placeholders are substituted *inside* an
+- Args are an **array**; each element is one argv entry. Placeholders are substituted _inside_ an
   element and never re-split, so a prompt with spaces, quotes or newlines is always exactly one
   argument. No shell is involved.
 - The settings form may show/edit args as a single shell-like line for convenience, parsed with
@@ -78,7 +78,7 @@ Resume and fork need the harness's own session id. Two strategies:
 
 - **`assigned`** — we generate a UUID and pass it at start. Deterministic; preferred where supported.
 - **`latest-in-cwd`** — the harness picks its own id, so we resume "the most recent session in this
-  directory". This is safe *because every workspace has a unique worktree path*. Its limit: with
+  directory". This is safe _because every workspace has a unique worktree path_. Its limit: with
   several sessions in one workspace only the newest is addressable. Later we can recover the real
   id from the harness's session store.
 
@@ -87,17 +87,17 @@ Resume and fork need the harness's own session id. Two strategies:
 Checked against the CLIs installed on the planning machine on 2026-09-17 (`--help` output, not yet
 exercised end-to-end). Re-verify during M4; these flags move.
 
-| | **Claude Code** 2.1.273 | **Codex** 0.154.0 | **Grok** 1.0.30 | **OpenCode** 1.18.31 |
-|---|---|---|---|---|
-| command | `claude` | `codex` | `grok` | `opencode` |
-| model | `--model {model}` | `-m {model}` | `-m {model}` | `-m {model}` (`provider/model`) |
-| effort | `--effort {effort}` | `-c model_reasoning_effort="{effort}"` | `--reasoning-effort {effort}` | — (no flag) |
-| effort values | low, medium, high, xhigh, max | *verify* | *verify* | n/a |
-| prompt | positional `{prompt}` | positional `{prompt}` | positional `{prompt}` | `--prompt {prompt}` |
-| assign session id | `--session-id {uuid}` | — | `--session-id {uuid}` | — |
-| resume | `--resume {session_id}` | `resume {session_id}` / `resume --last` | `--resume {session_id}` | `--session {id}` / `--continue` |
-| fork | `--resume {id} --fork-session` | `fork {session_id}` / `fork --last` | `--resume {id} --fork-session` | `--continue --fork` |
-| session_id_mode | assigned | latest-in-cwd | assigned | latest-in-cwd |
+|                   | **Claude Code** 2.1.273        | **Codex** 0.154.0                       | **Grok** 1.0.30                | **OpenCode** 1.18.31            |
+| ----------------- | ------------------------------ | --------------------------------------- | ------------------------------ | ------------------------------- |
+| command           | `claude`                       | `codex`                                 | `grok`                         | `opencode`                      |
+| model             | `--model {model}`              | `-m {model}`                            | `-m {model}`                   | `-m {model}` (`provider/model`) |
+| effort            | `--effort {effort}`            | `-c model_reasoning_effort="{effort}"`  | `--reasoning-effort {effort}`  | — (no flag)                     |
+| effort values     | low, medium, high, xhigh, max  | _verify_                                | _verify_                       | n/a                             |
+| prompt            | positional `{prompt}`          | positional `{prompt}`                   | positional `{prompt}`          | `--prompt {prompt}`             |
+| assign session id | `--session-id {uuid}`          | —                                       | `--session-id {uuid}`          | —                               |
+| resume            | `--resume {session_id}`        | `resume {session_id}` / `resume --last` | `--resume {session_id}`        | `--session {id}` / `--continue` |
+| fork              | `--resume {id} --fork-session` | `fork {session_id}` / `fork --last`     | `--resume {id} --fork-session` | `--continue --fork`             |
+| session_id_mode   | assigned                       | latest-in-cwd                           | assigned                       | latest-in-cwd                   |
 
 Notes:
 

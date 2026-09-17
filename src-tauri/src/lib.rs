@@ -1,0 +1,54 @@
+//! Switchyard core.
+//!
+//! The frontend holds no truth: state lives here and the webview renders it. `commands` is the
+//! whole IPC surface and stays thin — real work belongs in the domain modules.
+
+mod commands;
+
+use tauri_specta::{collect_commands, Builder};
+
+/// Where the generated TypeScript bindings live, relative to this crate.
+#[cfg(any(debug_assertions, test))]
+const BINDINGS_PATH: &str = "../src/lib/bindings.ts";
+
+fn ipc_builder() -> Builder<tauri::Wry> {
+    Builder::<tauri::Wry>::new().commands(collect_commands![commands::app_info])
+}
+
+/// Release builds never write bindings: there is no source tree next to an installed app.
+#[cfg(any(debug_assertions, test))]
+fn export_bindings(builder: &Builder<tauri::Wry>) {
+    builder
+        .export(
+            specta_typescript::Typescript::default().header("// @ts-nocheck\n/* eslint-disable */"),
+            BINDINGS_PATH,
+        )
+        .expect("failed to export TypeScript bindings");
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let builder = ipc_builder();
+
+    // Keep the checked-in bindings fresh while developing. CI verifies they are not stale.
+    #[cfg(debug_assertions)]
+    export_bindings(&builder);
+
+    tauri::Builder::default()
+        .invoke_handler(builder.invoke_handler())
+        .setup(move |app| {
+            builder.mount_events(app);
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running Switchyard");
+}
+
+#[cfg(test)]
+mod tests {
+    /// `bun run bindings` runs this to regenerate `src/lib/bindings.ts` without launching the app.
+    #[test]
+    fn export_bindings() {
+        super::export_bindings(&super::ipc_builder());
+    }
+}

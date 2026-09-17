@@ -1,0 +1,7 @@
+dist
+target
+src-tauri/gen
+src-tauri/icons
+src/lib/bindings.ts
+bun.lock
+Cargo.lock

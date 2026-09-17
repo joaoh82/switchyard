@@ -30,24 +30,24 @@ UI renders it and sends intents. This keeps the door open for a headless core la
 
 ## Stack choices
 
-| Concern | Choice | Why |
-|---------|--------|-----|
-| Shell | **Tauri 2** | Small, Rust core, all three OSes, good updater/bundler story. |
-| Frontend | **React + TypeScript + Vite**, Tailwind, Zustand | Boring and well-trodden; biggest component ecosystem for trees, panels, diff views. |
-| JS tooling | **bun** | Already installed; fast. Plain `package.json`, so npm/pnpm still work for contributors. |
-| Terminal | **xterm.js** + fit, webgl (with DOM-renderer fallback; the canvas addon was dropped in xterm.js 6), web-links, unicode11 addons | The standard; what VS Code uses. |
-| PTY | **`portable-pty`** (wezterm) | One API over Unix PTYs and Windows ConPTY. |
-| Git | **`git` CLI** behind a `GitBackend` trait | Worktree support in libgit2/gitoxide is partial; the CLI is the reference implementation and respects the user's config, hooks and credentials. |
-| State | **SQLite** via `rusqlite` (bundled) | Projects/workspaces/sessions are relational; bundled build avoids system-lib differences. |
-| Settings | TOML file in the OS config dir | Human-editable, easy to back up and diff. Harness definitions live here. |
-| Paths | `directories` crate | Correct config/data dirs per OS. |
-| FS watching | `notify` + debouncer | Cross-platform; honour `.gitignore` via the `ignore` crate. |
-| Diff view | CodeMirror 6 merge view *(tentative)* | Much lighter than Monaco. See open questions. |
+| Concern     | Choice                                                                                                                          | Why                                                                                                                                             |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shell       | **Tauri 2**                                                                                                                     | Small, Rust core, all three OSes, good updater/bundler story.                                                                                   |
+| Frontend    | **React + TypeScript + Vite**, Tailwind, Zustand                                                                                | Boring and well-trodden; biggest component ecosystem for trees, panels, diff views.                                                             |
+| JS tooling  | **bun**                                                                                                                         | Already installed; fast. Plain `package.json`, so npm/pnpm still work for contributors.                                                         |
+| Terminal    | **xterm.js** + fit, webgl (with DOM-renderer fallback; the canvas addon was dropped in xterm.js 6), web-links, unicode11 addons | The standard; what VS Code uses.                                                                                                                |
+| PTY         | **`portable-pty`** (wezterm)                                                                                                    | One API over Unix PTYs and Windows ConPTY.                                                                                                      |
+| Git         | **`git` CLI** behind a `GitBackend` trait                                                                                       | Worktree support in libgit2/gitoxide is partial; the CLI is the reference implementation and respects the user's config, hooks and credentials. |
+| State       | **SQLite** via `rusqlite` (bundled)                                                                                             | Projects/workspaces/sessions are relational; bundled build avoids system-lib differences.                                                       |
+| Settings    | TOML file in the OS config dir                                                                                                  | Human-editable, easy to back up and diff. Harness definitions live here.                                                                        |
+| Paths       | `directories` crate                                                                                                             | Correct config/data dirs per OS.                                                                                                                |
+| FS watching | `notify` + debouncer                                                                                                            | Cross-platform; honour `.gitignore` via the `ignore` crate.                                                                                     |
+| Diff view   | CodeMirror 6 merge view _(tentative)_                                                                                           | Much lighter than Monaco. See open questions.                                                                                                   |
 
 ## PTY & terminal data path
 
 How it works: the Rust core opens a pseudo-terminal and spawns the harness attached to it, so the
-harness believes it is in an ordinary terminal. xterm.js in the webview is the terminal *emulator*:
+harness believes it is in an ordinary terminal. xterm.js in the webview is the terminal _emulator_:
 it parses the escape sequences, keeps the screen grid and draws it. This is the same split VS Code
 and every Electron terminal use (xterm.js + `node-pty`); we swap `node-pty` for `portable-pty` and
 Chromium for the system webview.
@@ -67,11 +67,11 @@ Chromium for the system webview.
 
 Agent workloads are low-throughput (KB/s); the cost is full-screen repaints while a harness streams.
 
-| Webview | Expectation |
-|---------|-------------|
-| WebView2 (Windows) | Chromium — on par with Electron. |
-| WKWebView (macOS) | Fast JS and WebGL — no concern. |
-| WebKitGTK (Linux) | **The risk.** WebGL is less reliable; NVIDIA + Wayland has known DMABUF blank/slow-window issues. |
+| Webview            | Expectation                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------- |
+| WebView2 (Windows) | Chromium — on par with Electron.                                                                  |
+| WKWebView (macOS)  | Fast JS and WebGL — no concern.                                                                   |
+| WebKitGTK (Linux)  | **The risk.** WebGL is less reliable; NVIDIA + Wayland has known DMABUF blank/slow-window issues. |
 
 Renderer policy: try `@xterm/addon-webgl`; on context loss or init failure fall back to xterm's
 built-in DOM renderer (the canvas addon is not available for xterm.js 6). Expose a setting to force
@@ -135,15 +135,15 @@ a whole class of quoting bugs, especially for prompts and especially on Windows.
 
 Operations needed for v1, all via the CLI with `--porcelain` / `-z` output where available:
 
-| Need | Command |
-|------|---------|
-| Is repo / find root | `git rev-parse --show-toplevel` |
-| Default branch | `git symbolic-ref --short refs/remotes/origin/HEAD`, else current branch, else `init.defaultBranch` |
-| Create workspace | `git worktree add -b <branch> <path> <base>` |
-| List / reconcile | `git worktree list --porcelain` |
-| Remove workspace | `git worktree remove [--force] <path>` (+ optional `git branch -D`) |
-| Changes | `git status --porcelain=v2 -z`, `git diff --name-status -z <merge-base>` |
-| Diff content | `git diff <merge-base> -- <file>`, `git show <rev>:<file>` |
+| Need                | Command                                                                                             |
+| ------------------- | --------------------------------------------------------------------------------------------------- |
+| Is repo / find root | `git rev-parse --show-toplevel`                                                                     |
+| Default branch      | `git symbolic-ref --short refs/remotes/origin/HEAD`, else current branch, else `init.defaultBranch` |
+| Create workspace    | `git worktree add -b <branch> <path> <base>`                                                        |
+| List / reconcile    | `git worktree list --porcelain`                                                                     |
+| Remove workspace    | `git worktree remove [--force] <path>` (+ optional `git branch -D`)                                 |
+| Changes             | `git status --porcelain=v2 -z`, `git diff --name-status -z <merge-base>`                            |
+| Diff content        | `git diff <merge-base> -- <file>`, `git show <rev>:<file>`                                          |
 
 Decisions:
 
@@ -153,7 +153,7 @@ Decisions:
   260-char limit bites deep `node_modules` trees (also recommend `core.longpaths=true` there).
 - **Branch naming**: `<prefix>/<workspace-slug>`, prefix default `sy`, configurable.
 - **Reconciliation**: on startup and on focus, compare the DB with `git worktree list`. Worktrees
-  deleted behind our back are marked *missing*, not silently dropped.
+  deleted behind our back are marked _missing_, not silently dropped.
 - **Deleting** a workspace with uncommitted or unmerged work requires explicit confirmation that
   names what will be lost.
 - Untracked-but-needed files (`.env`, etc.) don't exist in a fresh worktree. v1: document it.
@@ -173,36 +173,40 @@ ui_state    key, value            -- panel sizes, last selection, per-project la
 ```
 
 `local` is a real row (`kind = 'local'`, `worktree_path = root_path`) so the rest of the code never
-special-cases it. Harness definitions are *not* in the DB; they live in the settings file.
+special-cases it. Harness definitions are _not_ in the DB; they live in the settings file.
 
 ## Cross-platform notes & risks
 
-| Platform | Watch out for |
-|----------|---------------|
-| **Linux** | WebKitGTK is the weakest webview: xterm.js WebGL can be flaky → auto-fallback to the DOM renderer. Known blank-window issues on NVIDIA/Wayland (`WEBKIT_DISABLE_DMABUF_RENDERER=1`). Test on Hyprland (tiling, fractional scaling). Ship AppImage + deb + rpm, plus an AUR package. |
-| **macOS** | PATH resolution (above). Code signing + notarization needed for a painless install. Universal binary. |
+| Platform    | Watch out for                                                                                                                                                                                                                                                                                               |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Linux**   | WebKitGTK is the weakest webview: xterm.js WebGL can be flaky → auto-fallback to the DOM renderer. Known blank-window issues on NVIDIA/Wayland (`WEBKIT_DISABLE_DMABUF_RENDERER=1`). Test on Hyprland (tiling, fractional scaling). Ship AppImage + deb + rpm, plus an AUR package.                         |
+| **macOS**   | PATH resolution (above). Code signing + notarization needed for a painless install. Universal binary.                                                                                                                                                                                                       |
 | **Windows** | ConPTY quirks (resize reflow, exit detection), needs Win10 1809+. WebView2 runtime bootstrapper. Path length. `git` must be installed — detect and guide. Harness CLIs may be `.cmd` shims (npm) which need `cmd /c` to spawn. Some harnesses officially support Windows only via WSL — see open questions. |
-| **All** | Keybindings: `Mod` = Cmd on macOS, Ctrl elsewhere — but Ctrl+C/V/etc. belong to the TUI. Copy/paste in the terminal needs per-OS conventions (Ctrl+Shift+C/V on Linux/Windows). |
+| **All**     | Keybindings: `Mod` = Cmd on macOS, Ctrl elsewhere — but Ctrl+C/V/etc. belong to the TUI. Copy/paste in the terminal needs per-OS conventions (Ctrl+Shift+C/V on Linux/Windows).                                                                                                                             |
 
 The PTY + webview terminal path is the highest-risk piece and the one most likely to differ per OS,
 which is why the [roadmap](05-roadmap.md) proves it on all three platforms before anything else.
 
-## Proposed repo layout
+## Repo layout
 
 ```
 switchyard/
+├─ Cargo.toml                # cargo workspace root (shared target/, lints, release profile)
 ├─ docs/
 ├─ src/                      # frontend
-│  ├─ app/  components/  features/{sidebar,composer,terminal,changes,settings}/
-│  ├─ lib/ipc.ts             # typed wrappers around invoke/channels
+│  ├─ features/{shell,sidebar,workspace,changes,…}/
+│  ├─ lib/ipc.ts             # the only module that talks to the core
+│  ├─ lib/bindings.ts        # generated by tauri-specta — do not edit
 │  └─ stores/
-├─ src-tauri/
+├─ src-tauri/                # the Tauri app crate
 │  ├─ src/{projects,workspaces,git,harness,watch,env,store}/
-│  ├─ crates/pty-host/       # no Tauri deps; in-process now, `switchyardd` later
 │  ├─ src/commands.rs        # the IPC surface, thin
 │  ├─ migrations/
 │  └─ tauri.conf.json
-└─ .github/workflows/        # build + test matrix: ubuntu, macos, windows
+├─ crates/
+│  └─ pty-host/              # no Tauri deps; in-process now, `switchyardd` later (M1)
+└─ .github/workflows/        # check + bundle matrix: ubuntu, macos, windows
 ```
 
-Generate the TypeScript IPC types from Rust (`tauri-specta` or `ts-rs`) so the boundary can't drift.
+TypeScript IPC types are generated from Rust with `tauri-specta`, so the boundary can't drift; CI
+fails when the checked-in bindings are stale.

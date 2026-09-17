@@ -4,13 +4,14 @@ Ordered by risk first, then by the shortest path to something usable daily. Ever
 pass on **Linux, macOS and Windows** before it is done — CI enforces the build, a short manual
 checklist covers what CI can't see.
 
-## M0 — Scaffold
+## M0 — Scaffold ✅
 
 - Tauri 2 + React + TS + Vite + bun; lint/format (clippy, rustfmt, eslint, prettier).
 - GitHub Actions matrix: ubuntu / macos / windows — build, `cargo test`, frontend tests.
 - Typed IPC generation wired up. Empty three-panel shell with resizable panels.
 
-*Exit:* a signed-or-not installer artifact is produced for all three OSes on every push.
+_Exit:_ a signed-or-not installer artifact is produced for all three OSes on every push to `main`
+(pull requests run the check matrix only — macOS minutes are billed at 10x on private repos).
 
 ## M1 — Terminal spike (highest risk, do first)
 
@@ -22,7 +23,7 @@ checklist covers what CI can't see.
 - Run a plain shell, then `claude`, in the center panel.
 - WebGL renderer with automatic DOM-renderer fallback; evaluate the WebKitGTK/NVIDIA mitigations.
 
-*Exit:* a full-screen TUI (Claude Code, plus `vim`/`htop` as torture tests) is usable — colours,
+_Exit:_ a full-screen TUI (Claude Code, plus `vim`/`htop` as torture tests) is usable — colours,
 resize, mouse, paste, unicode — on all three OSes, including Hyprland/Wayland. Throughput test:
 `cat` a large file without freezing the UI. Record a go/no-go on Linux webview rendering, with
 numbers (frame times while a harness streams, WebGL vs DOM), before starting M2.
@@ -33,7 +34,7 @@ numbers (frame times while a harness streams, WebGL vs DOM), before starting M2.
 - Sidebar tree with `local`. Selecting `local` opens a shell tab at the repo root.
 - Persist selection, panel sizes, expansion state.
 
-*Exit:* add, reorder and remove projects; restart the app and everything is where you left it.
+_Exit:_ add, reorder and remove projects; restart the app and everything is where you left it.
 
 ## M3 — Workspaces (the core loop)
 
@@ -43,7 +44,7 @@ numbers (frame times while a harness streams, WebGL vs DOM), before starting M2.
 - Built-in harness definitions (hard-coded, no settings UI yet). Naming + slugging.
 - Failure handling: nothing half-created is left behind.
 
-*Exit:* from a cold start, create three workspaces in one project on different harnesses and watch
+_Exit:_ from a cold start, create three workspaces in one project on different harnesses and watch
 them work in parallel. **This is the first version worth dogfooding.**
 
 ## M4 — Harness settings
@@ -53,14 +54,14 @@ them work in parallel. **This is the first version worth dogfooding.**
 - `stdin` prompt transport with readiness detection.
 - Re-verify every default in [04-harnesses](04-harnesses.md) end-to-end on each OS.
 
-*Exit:* a harness Switchyard has never heard of can be added and used without touching code.
+_Exit:_ a harness Switchyard has never heard of can be added and used without touching code.
 
 ## M5 — Right panel
 
 - File watcher (debounced, `.gitignore`-aware). Changes tab (uncommitted + committed vs merge-base).
 - Files tab. Diff viewer + read-only file viewer. Open in editor.
 
-*Exit:* while an agent works, the changes list and open diff update live, and stay responsive in a
+_Exit:_ while an agent works, the changes list and open diff update live, and stay responsive in a
 large repo (test against one with a big `node_modules`).
 
 ## M6 — Session lifecycle
@@ -71,7 +72,7 @@ large repo (test against one with a big `node_modules`).
 - Shell tabs alongside harness tabs. Rename / archive / delete workspace with safety prompts.
 - Worktree reconciliation on startup.
 
-*Exit:* quit mid-task, relaunch, and be back in the same conversations within a couple of clicks.
+_Exit:_ quit mid-task, relaunch, and be back in the same conversations within a couple of clicks.
 
 ## M7 — Ship
 
@@ -79,7 +80,7 @@ large repo (test against one with a big `node_modules`).
 - Tauri updater. Crash/error log collection that stays local. First-run experience, docs site/README.
 - Licence, contribution guide, issue templates.
 
-*Exit:* v0.1.0 public release.
+_Exit:_ v0.1.0 public release.
 
 ## Later (unordered)
 

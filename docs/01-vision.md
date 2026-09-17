@@ -49,5 +49,5 @@ Out (for now, see [roadmap](05-roadmap.md) "Later"):
 
 ## Non-goals
 
-- Replacing your editor. The right panel is for *reviewing*, with an "open in editor" escape hatch.
+- Replacing your editor. The right panel is for _reviewing_, with an "open in editor" escape hatch.
 - Being a terminal emulator product. The terminal exists to host harnesses (and a utility shell).

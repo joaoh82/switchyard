@@ -20,21 +20,21 @@ settled.
 
 ## Technical
 
-6. **When to ship the terminal daemon.** *Direction settled:* the PTY host is built behind a
+6. **When to ship the terminal daemon.** _Direction settled:_ the PTY host is built behind a
    message-shaped boundary from M1 (see [03-architecture](03-architecture.md)), in-process for v1,
-   with harness resume args covering restarts. *Still open:* when to move it out of process, and
+   with harness resume args covering restarts. _Still open:_ when to move it out of process, and
    the daemon's lifecycle — who starts/stops it, upgrades while sessions are live, one daemon per
    user vs per app instance, and what "background" means on Windows.
 7. **Windows harness support.** Several harnesses officially target WSL rather than native Windows.
-   Do we support launching harnesses *inside WSL* (`wsl.exe -d <distro> -- claude …`, worktree on
+   Do we support launching harnesses _inside WSL_ (`wsl.exe -d <distro> -- claude …`, worktree on
    the WSL filesystem)? Lean: native first; treat WSL as a per-harness command prefix + path
    translation, designed in M4, built when someone needs it.
 8. **Worktree root default.** `<data-dir>/worktrees/…` (hidden, tidy) vs `~/switchyard/…` (visible,
    short — matters on Windows). Lean: visible and short, configurable.
 9. **Diff viewer.** CodeMirror 6 merge view (light, flexible) vs Monaco (heavier, familiar) vs a
    dedicated React diff component. Lean: CodeMirror; decide with a spike in M5.
-10. **Frontend framework.** React is the lean for ecosystem reasons. Solid/Svelte would be lighter.
-    Decide before M0 — it's the one choice that is expensive to reverse.
+10. ~~**Frontend framework.**~~ **Settled 2026-09-17: React** (+ TypeScript, Vite, Tailwind,
+    Zustand), for the component ecosystem.
 11. **`stdin` transport readiness detection.** Quiet-period heuristic vs per-harness ready regex vs
     fixed delay. Needs the M4 experiments.
 12. **Discovering harness-chosen session ids** (Codex, OpenCode) by reading their session stores —
