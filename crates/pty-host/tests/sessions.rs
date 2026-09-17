@@ -9,13 +9,47 @@ use pty_host::{HostError, HostEvent, LaunchPlan, PtyHost, SessionId, SessionStat
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
-fn host() -> (PtyHost, Receiver<HostEvent>) {
+fn host() -> (Arc<PtyHost>, Receiver<HostEvent>) {
     let (tx, rx) = mpsc::channel();
     let tx = Mutex::new(tx);
     let host = PtyHost::new(Arc::new(move |event| {
         let _ = tx.lock().unwrap().send(event);
     }));
-    (host, rx)
+    (Arc::new(host), rx)
+}
+
+/// Attach `capture` the way a terminal emulator attaches: it records output *and* answers
+/// cursor-position queries, as xterm.js does in the app. A viewer that stays silent is not a
+/// terminal — and ConPTY will not start the program until a terminal has answered.
+fn attach_terminal(
+    host: &Arc<PtyHost>,
+    id: &SessionId,
+    capture: &Capture,
+) -> pty_host::AttachmentId {
+    let (query_tx, query_rx) = mpsc::channel::<()>();
+    let mut record = capture.sink();
+    let attachment = host
+        .attach(
+            id,
+            Box::new(move |bytes| {
+                for _ in bytes.windows(4).filter(|w| *w == b"\x1b[6n") {
+                    let _ = query_tx.send(());
+                }
+                record(bytes)
+            }),
+        )
+        .unwrap();
+
+    // Sinks must not call back into the host, so replies are written from a thread of their own.
+    // It holds the host weakly and ends when the session (and with it the sink) is gone.
+    let (host, id) = (Arc::downgrade(host), id.clone());
+    std::thread::spawn(move || {
+        while query_rx.recv().is_ok() {
+            let Some(host) = host.upgrade() else { break };
+            let _ = host.write(&id, b"\x1b[1;1R");
+        }
+    });
+    attachment
 }
 
 /// Run `script` with the platform's shell.
@@ -99,7 +133,7 @@ fn streams_output_then_reports_the_exit_code() {
     let (host, events) = host();
     let session = host.spawn(shell("echo hello-from-pty&& exit 3")).unwrap();
     let capture = Capture::default();
-    host.attach(&session.id, capture.sink()).unwrap();
+    attach_terminal(&host, &session.id, &capture);
 
     let exit = wait_for_exit(&host, &events, &session.id);
 
@@ -126,7 +160,7 @@ fn a_late_viewer_gets_a_snapshot_of_what_it_missed() {
     wait_for_exit(&host, &events, &session.id);
 
     let capture = Capture::default();
-    host.attach(&session.id, capture.sink()).unwrap();
+    attach_terminal(&host, &session.id, &capture);
 
     // Delivered synchronously by `attach`, even though the process is long gone.
     assert!(
@@ -146,7 +180,7 @@ fn detached_viewers_stop_receiving() {
     };
     let session = host.spawn(shell(script)).unwrap();
     let (stays, leaves) = (Capture::default(), Capture::default());
-    host.attach(&session.id, stays.sink()).unwrap();
+    attach_terminal(&host, &session.id, &stays);
     let leaving = host.attach(&session.id, leaves.sink()).unwrap();
     host.detach(&session.id, leaving).unwrap();
 
@@ -162,7 +196,7 @@ fn input_reaches_the_process() {
     let (host, events) = host();
     let session = host.spawn(shell("read line; echo \"got:$line\"")).unwrap();
     let capture = Capture::default();
-    host.attach(&session.id, capture.sink()).unwrap();
+    attach_terminal(&host, &session.id, &capture);
 
     host.write(&session.id, b"ping\n").unwrap();
 
@@ -181,7 +215,7 @@ fn the_process_sees_the_terminal_size_and_resizes() {
     };
     let session = host.spawn(plan).unwrap();
     let capture = Capture::default();
-    host.attach(&session.id, capture.sink()).unwrap();
+    attach_terminal(&host, &session.id, &capture);
     capture.wait_for("30 100");
 
     host.resize(
@@ -274,7 +308,7 @@ fn the_host_answers_cursor_queries_when_nobody_is_watching() {
     wait_for_exit(&host, &events, &session.id);
 
     let capture = Capture::default();
-    host.attach(&session.id, capture.sink()).unwrap();
+    attach_terminal(&host, &session.id, &capture);
     assert!(
         capture.text().contains("host-replied"),
         "{:?}",
@@ -327,7 +361,7 @@ fn the_plan_controls_the_environment() {
     plan.env = vec![("SY_TEST".into(), "yes".into())];
     let session = host.spawn(plan).unwrap();
     let capture = Capture::default();
-    host.attach(&session.id, capture.sink()).unwrap();
+    attach_terminal(&host, &session.id, &capture);
     wait_for_exit(&host, &events, &session.id);
     assert!(
         capture.text().contains("[yes|xterm-256color|unset]"),
