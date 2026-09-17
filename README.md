@@ -34,6 +34,7 @@ bun install
 bun tauri dev        # run the app with hot reload
 bun run check        # format check, lint, typecheck, frontend tests
 cargo test           # Rust tests (also regenerates src/lib/bindings.ts)
+bun run lint:windows # clippy for the Windows target, from any OS (rustup target add x86_64-pc-windows-msvc)
 bun tauri build      # produce installers for the current OS
 scripts/bench/run.sh # terminal rendering benchmarks (docs/07-terminal-benchmarks.md)
 ```

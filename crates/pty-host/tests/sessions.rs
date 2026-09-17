@@ -3,7 +3,7 @@
 
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use pty_host::{HostError, HostEvent, LaunchPlan, PtyHost, SessionId, SessionState, TermSize};
 
@@ -61,8 +61,10 @@ impl Capture {
         String::from_utf8_lossy(&self.0.lock().unwrap()).into_owned()
     }
 
+    /// Only the Unix-only tests need to wait on output mid-run.
+    #[cfg(unix)]
     fn wait_for(&self, needle: &str) {
-        let start = Instant::now();
+        let start = std::time::Instant::now();
         while !self.text().contains(needle) {
             assert!(
                 start.elapsed() < TIMEOUT,

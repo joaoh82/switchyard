@@ -14,6 +14,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "lint:windows": "cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings",
     "bindings": "cargo test -p switchyard export_bindings",
     "check": "bun run format:check && bun run lint && bun run typecheck && bun run test"
   },

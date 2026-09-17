@@ -97,6 +97,7 @@ pub fn print_env_and_exit_if_asked() {
 
 /// Extract the variables printed between the markers, ignoring whatever the shell's startup
 /// files printed around them.
+#[cfg(any(unix, test))]
 fn parse_dump(output: &[u8]) -> Option<BTreeMap<String, String>> {
     let start = find(output, BEGIN)? + BEGIN.len();
     let end = start + find(&output[start..], END)?;
@@ -113,6 +114,7 @@ fn parse_dump(output: &[u8]) -> Option<BTreeMap<String, String>> {
     (!vars.is_empty()).then_some(vars)
 }
 
+#[cfg(any(unix, test))]
 fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack.windows(needle.len()).position(|w| w == needle)
 }
