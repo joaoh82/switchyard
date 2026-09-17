@@ -30,6 +30,9 @@ const MAX_BATCH: usize = 512 * 1024;
 /// grandchild that still holds the terminal open.
 const EXIT_DRAIN_QUIET: Duration = Duration::from_millis(150);
 
+/// DSR 6, "report cursor position". The reply is `ESC [ row ; col R`.
+const CURSOR_POSITION_QUERY: &[u8] = b"\x1b[6n";
+
 enum Msg {
     Output(Vec<u8>),
     Eof,
@@ -259,8 +262,12 @@ impl Session {
             }
 
             if !batch.is_empty() {
-                self.deliver(&batch);
+                let replies = self.deliver(&batch);
                 batch.clear();
+                if !replies.is_empty() {
+                    // Best effort: the process may already be gone.
+                    let _ = self.write(&replies);
+                }
             }
         }
 
@@ -290,11 +297,37 @@ impl Session {
             });
     }
 
-    fn deliver(&self, batch: &[u8]) {
+    /// Feed a batch to the headless terminal and the viewers. Returns bytes the *terminal* owes
+    /// the program in response, which the caller writes back to the PTY.
+    ///
+    /// A program can ask the terminal where the cursor is (`ESC [ 6 n`) and wait for the answer.
+    /// Normally the attached xterm.js replies. With nobody attached there is no terminal to
+    /// reply, so the host answers from its headless one. This is not an edge case: ConPTY asks
+    /// exactly this at startup and runs nothing until it hears back, so without an answer a
+    /// Windows session started before its view attaches would hang forever. Deciding under the
+    /// view lock guarantees exactly one reply: ours, or the viewer's.
+    fn deliver(&self, batch: &[u8]) -> Vec<u8> {
         let mut view = self.view();
+        let unattended = view.sinks.is_empty();
         view.parser.process(batch);
         view.last_output = Instant::now();
         view.sinks.retain_mut(|(_, sink)| sink(batch));
+
+        let mut replies = Vec::new();
+        if unattended {
+            let queries = batch
+                .windows(CURSOR_POSITION_QUERY.len())
+                .filter(|w| *w == CURSOR_POSITION_QUERY)
+                .count();
+            if queries > 0 {
+                let (row, col) = view.parser.screen().cursor_position();
+                let report = format!("\x1b[{};{}R", row + 1, col + 1);
+                for _ in 0..queries {
+                    replies.extend_from_slice(report.as_bytes());
+                }
+            }
+        }
+        replies
     }
 
     fn view(&self) -> MutexGuard<'_, View> {

@@ -259,6 +259,65 @@ fn a_missing_program_is_a_spawn_error() {
     }
 }
 
+/// Ask the terminal for the cursor position, read the 6-byte reply, and say which one came.
+#[cfg(unix)]
+const ASK_CURSOR_POSITION: &str = "stty raw -echo; printf '\\033[6n'; \
+     r=$(dd bs=1 count=6 2>/dev/null); stty sane; \
+     case \"$r\" in *'[1;1R') echo host-replied;; *'[9;9R') echo viewer-replied;; *) echo no-reply;; esac";
+
+#[cfg(unix)]
+#[test]
+fn the_host_answers_cursor_queries_when_nobody_is_watching() {
+    // What ConPTY does at startup on Windows: it blocks until the terminal reports the cursor.
+    let (host, events) = host();
+    let session = host.spawn(shell(ASK_CURSOR_POSITION)).unwrap();
+    wait_for_exit(&host, &events, &session.id);
+
+    let capture = Capture::default();
+    host.attach(&session.id, capture.sink()).unwrap();
+    assert!(
+        capture.text().contains("host-replied"),
+        "{:?}",
+        capture.text()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn an_attached_viewer_answers_cursor_queries_itself() {
+    let (host, events) = host();
+    let session = host
+        .spawn(shell(&format!("sleep 1; {ASK_CURSOR_POSITION}")))
+        .unwrap();
+
+    // A viewer that behaves like a terminal emulator: it replies to the query it is shown.
+    let capture = Capture::default();
+    let (seen_tx, seen_rx) = mpsc::channel();
+    let mut inner = capture.sink();
+    host.attach(
+        &session.id,
+        Box::new(move |bytes| {
+            if bytes.windows(4).any(|w| w == b"\x1b[6n") {
+                let _ = seen_tx.send(());
+            }
+            inner(bytes)
+        }),
+    )
+    .unwrap();
+    seen_rx
+        .recv_timeout(TIMEOUT)
+        .expect("the viewer never saw the query");
+    host.write(&session.id, b"\x1b[9;9R").unwrap();
+
+    wait_for_exit(&host, &events, &session.id);
+    // Exactly one reply reached the program, and it was the viewer's.
+    assert!(
+        capture.text().contains("viewer-replied"),
+        "{:?}",
+        capture.text()
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn the_plan_controls_the_environment() {

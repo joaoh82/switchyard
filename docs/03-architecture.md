@@ -112,6 +112,13 @@ of history) and can emit a **snapshot** — a byte sequence that repaints the
 current screen — followed by the live stream. This pays off immediately in v1 (clean switching
 between workspaces without keeping every xterm instance mounted) and is mandatory for the daemon.
 
+**The host is the terminal when nobody is watching.** Programs can query the terminal and wait for
+an answer — above all "where is the cursor?" (`ESC [ 6 n`). With a viewer attached, xterm.js
+replies. With none, the host replies from its headless terminal; the decision is made under the
+same lock that delivers output, so exactly one reply is ever sent. This is load-bearing on Windows:
+`portable-pty` creates the pseudo-console with `PSEUDOCONSOLE_INHERIT_CURSOR`, which makes ConPTY
+ask that question at startup and run nothing until it is answered.
+
 - **Re-attach (v1)**: switching workspaces detaches the view; the session keeps running in the
   host. On re-mount: `attach` → write snapshot → stream live.
 - **App quit (v1)**: the host dies with the app. Sessions are restored through each harness's
@@ -184,12 +191,12 @@ special-cases it. Harness definitions are _not_ in the DB; they live in the sett
 
 ## Cross-platform notes & risks
 
-| Platform    | Watch out for                                                                                                                                                                                                                                                                                               |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Linux**   | WebKitGTK is the weakest webview: xterm.js WebGL can be flaky → auto-fallback to the DOM renderer. Known blank-window issues on NVIDIA/Wayland (`WEBKIT_DISABLE_DMABUF_RENDERER=1`). Test on Hyprland (tiling, fractional scaling). Ship AppImage + deb + rpm, plus an AUR package.                         |
-| **macOS**   | PATH resolution (above). Code signing + notarization needed for a painless install. Universal binary.                                                                                                                                                                                                       |
-| **Windows** | ConPTY quirks (resize reflow, exit detection), needs Win10 1809+. WebView2 runtime bootstrapper. Path length. `git` must be installed — detect and guide. Harness CLIs may be `.cmd` shims (npm) which need `cmd /c` to spawn. Some harnesses officially support Windows only via WSL — see open questions. |
-| **All**     | Keybindings: `Mod` = Cmd on macOS, Ctrl elsewhere — but Ctrl+C/V/etc. belong to the TUI. Copy/paste in the terminal needs per-OS conventions (Ctrl+Shift+C/V on Linux/Windows).                                                                                                                             |
+| Platform    | Watch out for                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Linux**   | WebKitGTK is the weakest webview: xterm.js WebGL can be flaky → auto-fallback to the DOM renderer. Known blank-window issues on NVIDIA/Wayland (`WEBKIT_DISABLE_DMABUF_RENDERER=1`). Test on Hyprland (tiling, fractional scaling). Ship AppImage + deb + rpm, plus an AUR package.                                                                                                                                                                                  |
+| **macOS**   | PATH resolution (above). Code signing + notarization needed for a painless install. Universal binary.                                                                                                                                                                                                                                                                                                                                                                |
+| **Windows** | ConPTY quirks (resize reflow, exit detection, the startup cursor query above, `ClosePseudoConsole` blocking — so teardown runs off-thread, `portable-pty` 0.9 reporting a successful kill as an error), needs Win10 1809+. WebView2 runtime bootstrapper. Path length. `git` must be installed — detect and guide. Harness CLIs may be `.cmd` shims (npm) which need `cmd /c` to spawn. Some harnesses officially support Windows only via WSL — see open questions. |
+| **All**     | Keybindings: `Mod` = Cmd on macOS, Ctrl elsewhere — but Ctrl+C/V/etc. belong to the TUI. Copy/paste in the terminal needs per-OS conventions (Ctrl+Shift+C/V on Linux/Windows).                                                                                                                                                                                                                                                                                      |
 
 The PTY + webview terminal path is the highest-risk piece and the one most likely to differ per OS,
 which is why the [roadmap](05-roadmap.md) proves it on all three platforms before anything else.
