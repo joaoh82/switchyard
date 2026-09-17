@@ -9,7 +9,7 @@ and workspaces on the left, the live agent terminal in the middle, and the files
 It is modeled after Superset and Conductor, with one hard requirement they don't meet:
 **Linux, macOS and Windows are all first-class from day one.**
 
-> Status: early development — M0 (scaffold) done, M1 (terminal) next. See the [roadmap](docs/05-roadmap.md).
+> Status: early development — M0 (scaffold) and M1 (terminal) done, M2 (projects) next. See the [roadmap](docs/05-roadmap.md).
 
 ## Why "Switchyard"
 
@@ -35,6 +35,7 @@ bun tauri dev        # run the app with hot reload
 bun run check        # format check, lint, typecheck, frontend tests
 cargo test           # Rust tests (also regenerates src/lib/bindings.ts)
 bun tauri build      # produce installers for the current OS
+scripts/bench/run.sh # terminal rendering benchmarks (docs/07-terminal-benchmarks.md)
 ```
 
 `src/lib/bindings.ts` is generated from the Rust commands by `tauri-specta` — never edit it by hand.

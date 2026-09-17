@@ -13,7 +13,7 @@ checklist covers what CI can't see.
 _Exit:_ a signed-or-not installer artifact is produced for all three OSes on every push to `main`
 (pull requests run the check matrix only — macOS minutes are billed at 10x on private repos).
 
-## M1 — Terminal spike (highest risk, do first)
+## M1 — Terminal spike (highest risk, do first) ✅
 
 - `pty-host` crate on `portable-pty`, with the message-shaped API (spawn / attach / write / resize /
   kill + events) and **no Tauri dependencies** — in-process for now, daemon-ready.
@@ -27,6 +27,9 @@ _Exit:_ a full-screen TUI (Claude Code, plus `vim`/`htop` as torture tests) is u
 resize, mouse, paste, unicode — on all three OSes, including Hyprland/Wayland. Throughput test:
 `cat` a large file without freezing the UI. Record a go/no-go on Linux webview rendering, with
 numbers (frame times while a harness streams, WebGL vs DOM), before starting M2.
+
+_Result:_ **go** on Linux — see [07-terminal-benchmarks](07-terminal-benchmarks.md). macOS and Windows
+are covered by CI (build + PTY integration tests) but still need a hands-on pass and benchmark rows.
 
 ## M2 — Projects & sidebar
 

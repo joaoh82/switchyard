@@ -3,8 +3,10 @@ import { Group, Panel, Separator, useDefaultLayout, usePanelRef } from "react-re
 import { ChangesPanel } from "@/features/changes/ChangesPanel";
 import { Sidebar } from "@/features/sidebar/Sidebar";
 import { WorkspacePanel } from "@/features/workspace/WorkspacePanel";
-import { isModKey } from "@/lib/platform";
+import { isModKey, shortcutKey } from "@/lib/platform";
+import { useAppStore } from "@/stores/app";
 import { useLayoutStore, type SidePanel } from "@/stores/layout";
+import { useTerminalStore } from "@/stores/terminals";
 import { StatusBar } from "./StatusBar";
 
 const separatorClass =
@@ -42,12 +44,22 @@ export function AppShell() {
     if (panel) setCollapsed(side, panel.isCollapsed());
   };
 
-  // Mod+B toggles the left panel, Mod+Alt+B the right. Mod-only, so a TUI never loses a key.
+  useEffect(() => void useAppStore.getState().load().catch(console.error), []);
+
+  // Mod+B toggles the left panel, Mod+Alt+B the right; Mod+T opens a shell tab and Mod+W closes
+  // the active one. Always behind Mod
+  // (see `isModKey`), so the program in the terminal never loses a key.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!isModKey(event) || event.shiftKey || event.code !== "KeyB") return;
+      if (!isModKey(event)) return;
+      const key = shortcutKey(event);
+      if (key === "b") toggle(event.altKey ? "right" : "left");
+      else if (key === "t" && !event.altKey) void useTerminalStore.getState().open();
+      else if (key === "w" && !event.altKey) {
+        const { activeId, close } = useTerminalStore.getState();
+        if (activeId) void close(activeId);
+      } else return;
       event.preventDefault();
-      toggle(event.altKey ? "right" : "left");
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);

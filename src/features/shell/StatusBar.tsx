@@ -1,23 +1,14 @@
-import { useEffect, useState } from "react";
-import { hasCore, ipc, type AppInfo } from "@/lib/ipc";
 import { formatShortcut } from "@/lib/platform";
+import { useAppStore } from "@/stores/app";
 import { useLayoutStore } from "@/stores/layout";
+import { useTerminalStore } from "@/stores/terminals";
 
 export function StatusBar() {
-  const [info, setInfo] = useState<AppInfo | null>(null);
+  const info = useAppStore((s) => s.info);
+  const env = useAppStore((s) => s.env);
+  const renderer = useTerminalStore((s) => s.renderer);
   const collapsed = useLayoutStore((s) => s.collapsed);
   const toggle = useLayoutStore((s) => s.toggle);
-
-  useEffect(() => {
-    if (!hasCore()) return;
-    let cancelled = false;
-    ipc.appInfo().then((value) => {
-      if (!cancelled) setInfo(value);
-    }, console.error);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   return (
     <footer className="flex h-6 shrink-0 items-center justify-between border-t border-line bg-surface px-2 text-[11px] text-ink-faint">
@@ -35,11 +26,24 @@ export function StatusBar() {
           onClick={() => toggle("right")}
         />
       </div>
-      <span className="font-mono">
-        {info
-          ? `${info.name} ${info.version}${info.debug ? "-dev" : ""} · ${info.os}/${info.arch}`
-          : "Switchyard · no core"}
-      </span>
+      <div className="flex items-center gap-3 font-mono">
+        {env?.warning && (
+          <span className="text-red-400" title={env.warning}>
+            shell environment unavailable
+          </span>
+        )}
+        {env && !env.warning && (
+          <span title={`Programs launch with the environment of ${env.shell}`}>
+            env: {env.source === "loginShell" ? "login shell" : "process"} · {env.pathEntries} PATH
+          </span>
+        )}
+        {renderer && <span title="Terminal renderer">{renderer}</span>}
+        <span>
+          {info
+            ? `${info.name} ${info.version}${info.debug ? "-dev" : ""} · ${info.os}/${info.arch}`
+            : "Switchyard · no core"}
+        </span>
+      </div>
     </footer>
   );
 }

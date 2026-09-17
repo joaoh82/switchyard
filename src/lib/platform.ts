@@ -2,13 +2,29 @@
 export const isMac =
   typeof navigator !== "undefined" && /mac/i.test(navigator.platform || navigator.userAgent);
 
-/** Whether the platform's primary modifier ("Mod") is held for this event. */
+/**
+ * Whether the app's primary modifier ("Mod") is held.
+ *
+ * Mod is ⌘ on macOS and **Ctrl+Shift** everywhere else — the convention terminal emulators use
+ * (Ctrl+Shift+C to copy), because plain Ctrl+letter belongs to the program in the terminal:
+ * Ctrl+B is "back one character" in a shell and the tmux prefix. App shortcuts must never take
+ * those away.
+ */
 export function isModKey(event: KeyboardEvent | MouseEvent): boolean {
-  return isMac ? event.metaKey : event.ctrlKey;
+  return isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && event.shiftKey;
 }
 
-/** Human-readable shortcut, e.g. `formatShortcut("B")` → "⌘B" or "Ctrl+B". */
+/** Human-readable shortcut, e.g. `formatShortcut("B")` → "⌘B" or "Ctrl+Shift+B". */
 export function formatShortcut(key: string, { alt = false } = {}): string {
   if (isMac) return `${alt ? "⌥" : ""}⌘${key}`;
-  return `Ctrl+${alt ? "Alt+" : ""}${key}`;
+  return `Ctrl+Shift+${alt ? "Alt+" : ""}${key}`;
+}
+
+/**
+ * The letter a shortcut event stands for, lower-cased ("b" for Ctrl+Shift+B). Uses the character
+ * the layout produces rather than the physical key, so shortcuts follow the key caps on Dvorak,
+ * AZERTY and friends.
+ */
+export function shortcutKey(event: KeyboardEvent): string {
+  return event.key.length === 1 ? event.key.toLowerCase() : event.key;
 }

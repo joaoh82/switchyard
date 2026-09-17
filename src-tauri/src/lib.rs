@@ -4,15 +4,36 @@
 //! whole IPC surface and stays thin — real work belongs in the domain modules.
 
 mod commands;
+mod env;
+mod error;
+mod state;
+mod terminal;
 
-use tauri_specta::{collect_commands, Builder};
+pub use env::print_env_and_exit_if_asked;
+
+use tauri::Manager;
+use tauri_specta::{collect_commands, collect_events, Builder, Event};
 
 /// Where the generated TypeScript bindings live, relative to this crate.
 #[cfg(any(debug_assertions, test))]
 const BINDINGS_PATH: &str = "../src/lib/bindings.ts";
 
 fn ipc_builder() -> Builder<tauri::Wry> {
-    Builder::<tauri::Wry>::new().commands(collect_commands![commands::app_info])
+    Builder::<tauri::Wry>::new()
+        .commands(collect_commands![
+            commands::app_info,
+            commands::bench_report,
+            terminal::env_info,
+            terminal::pty_spawn,
+            terminal::pty_attach,
+            terminal::pty_detach,
+            terminal::pty_write,
+            terminal::pty_resize,
+            terminal::pty_kill,
+            terminal::pty_close,
+            terminal::pty_list,
+        ])
+        .events(collect_events![terminal::PtyHostEvent])
 }
 
 /// Release builds never write bindings: there is no source tree next to an installed app.
@@ -35,9 +56,23 @@ pub fn run() {
     export_bindings(&builder);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
+
+            let handle = app.handle().clone();
+            let host = pty_host::PtyHost::new(std::sync::Arc::new(move |event| {
+                let _ = terminal::PtyHostEvent(event).emit(&handle);
+            }));
+            app.manage(state::AppState::new(host));
+
+            // Warm the login-shell environment now, so the first terminal doesn't wait for it.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                handle.state::<state::AppState>().env();
+            });
             Ok(())
         })
         .run(tauri::generate_context!())

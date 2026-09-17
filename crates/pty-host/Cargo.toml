@@ -1,0 +1,23 @@
+[package]
+name = "pty-host"
+description = "Owns pseudo-terminal sessions for Switchyard. No UI or Tauri dependencies: runs in-process today, as a daemon later."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+portable-pty = "0.9"
+vt100 = "0.16"
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+specta = { version = "=2.0.0-rc.25", optional = true, features = ["derive"] }
+
+[features]
+# Derive `specta::Type` on the public message types so the app can generate TS bindings.
+specta = ["dep:specta"]

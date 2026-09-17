@@ -52,16 +52,21 @@ it parses the escape sequences, keeps the screen grid and draws it. This is the 
 and every Electron terminal use (xterm.js + `node-pty`); we swap `node-pty` for `portable-pty` and
 Chromium for the system webview.
 
-- One `PtySession` per terminal tab: owns the child process, the master PTY, a reader thread, a
-  bounded scrollback ring buffer (bytes) and a **headless terminal state** (see below).
+- One session per terminal tab, serviced by three threads: a **reader** blocking on the PTY, a
+  **waiter** blocking on the child, and a **pump** that batches output, feeds the **headless
+  terminal state** (see below) and fans out to viewers.
 - **Output**: reader thread → Tauri `Channel` carrying raw bytes → `xterm.write()`. Use channels,
   not global events: they are ordered, per-session and avoid JSON-encoding the stream. Coalesce
   reads into ~16 ms batches so a TUI that repaints constantly doesn't flood IPC.
-- **Input**: `xterm.onData` → `write(session_id, bytes)`.
+- **Input**: `xterm.onData` → `write(session_id, bytes)`. IPC calls are dispatched to a thread
+  pool, so back-to-back calls can run out of order; the frontend therefore sends one write at a
+  time and coalesces whatever is typed meanwhile into the next (`writer.ts`).
 - **Resize**: fit addon → `resize(cols, rows)`, debounced.
 - **Activity signal**: the pump timestamps the last output; the sidebar status dots derive from
   that plus process liveness. We never parse harness output for meaning.
-- **Exit**: capture exit code, keep scrollback, surface Resume/Fork actions.
+- **Exit**: capture exit code, keep scrollback, surface Resume/Fork actions. `Exited` is announced
+  only after all output has been delivered. Where end-of-file never arrives (ConPTY; a background
+  grandchild holding the terminal) the pump stops once the PTY has been quiet for 150 ms.
 
 ### Rendering & performance expectations
 
@@ -102,8 +107,8 @@ kill(SessionId, signal)                 events: output, exit, activity
   frontend — is the owner of scrollback and terminal state.
 
 **Headless terminal state.** To restore a screen on (re)attach, raw byte replay is not enough for
-alt-screen TUIs. The host feeds output through a headless VT parser in Rust (candidates:
-`alacritty_terminal`, `vt100`) and can emit a **snapshot** — a byte sequence that repaints the
+alt-screen TUIs. The host feeds output through a headless VT parser in Rust (`vt100`, 10 000 lines
+of history) and can emit a **snapshot** — a byte sequence that repaints the
 current screen — followed by the live stream. This pays off immediately in v1 (clean switching
 between workspaces without keeping every xterm instance mounted) and is mandatory for the daemon.
 
@@ -119,9 +124,11 @@ launched from a desktop launcher, `PATH` will be missing mise/asdf/nvm/cargo/hom
 `claude` or `codex` simply won't be found even though they work in the user's terminal. (On the
 machine this was planned on, every harness is installed via mise.)
 
-- **Unix**: at startup run the user's login shell once, e.g. `$SHELL -ilc 'env -0'` with a timeout,
-  parse it, cache it, and use it as the base environment for every spawn. Provide a "Reload
-  environment" action.
+- **Unix**: at startup run the user's login shell once — `$SHELL -i -l -c '<switchyard>
+--switchyard-print-env'` — with a timeout. Asking our own binary to dump the environment (between
+  markers, NUL-separated) avoids depending on `env -0` or any shell's syntax, and ignores whatever
+  the startup files print. The result is cached and is the _whole_ environment of every spawn;
+  `env_info(reload: true)` re-runs it.
 - **Windows**: use the process environment; re-read user/system `PATH` from the registry on reload.
 - Resolve the harness `command` against that `PATH` ourselves so "not found" becomes a clear,
   actionable error in the UI (with the PATH we searched), not a silent dead terminal.

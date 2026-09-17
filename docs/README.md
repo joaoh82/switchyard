@@ -3,14 +3,15 @@
 Initial planning, written 2026-09-17. These are living documents: update them as decisions get made,
 and move anything settled out of [open questions](06-open-questions.md) into the relevant doc.
 
-| #   | Doc                                    | What it covers                                                  |
-| --- | -------------------------------------- | --------------------------------------------------------------- |
-| 01  | [Vision & scope](01-vision.md)         | What we're building, for whom, what is in and out of v1         |
-| 02  | [UX & flows](02-ux.md)                 | Three-panel layout, project tree, new-workspace flow, settings  |
-| 03  | [Architecture](03-architecture.md)     | Tauri structure, PTY, git, storage, cross-platform concerns     |
-| 04  | [Harnesses](04-harnesses.md)           | Harness config model, arg templating, verified defaults per CLI |
-| 05  | [Roadmap](05-roadmap.md)               | Milestones in build order, with exit criteria                   |
-| 06  | [Open questions](06-open-questions.md) | Decisions still to make                                         |
+| #   | Doc                                              | What it covers                                                  |
+| --- | ------------------------------------------------ | --------------------------------------------------------------- |
+| 01  | [Vision & scope](01-vision.md)                   | What we're building, for whom, what is in and out of v1         |
+| 02  | [UX & flows](02-ux.md)                           | Three-panel layout, project tree, new-workspace flow, settings  |
+| 03  | [Architecture](03-architecture.md)               | Tauri structure, PTY, git, storage, cross-platform concerns     |
+| 04  | [Harnesses](04-harnesses.md)                     | Harness config model, arg templating, verified defaults per CLI |
+| 05  | [Roadmap](05-roadmap.md)                         | Milestones in build order, with exit criteria                   |
+| 06  | [Open questions](06-open-questions.md)           | Decisions still to make                                         |
+| 07  | [Terminal benchmarks](07-terminal-benchmarks.md) | M1 go/no-go on webview terminal rendering, with numbers         |
 
 ## Vocabulary
 

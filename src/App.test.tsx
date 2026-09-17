@@ -13,17 +13,18 @@ describe("App shell", () => {
     expect(screen.getByRole("complementary", { name: "Changes" })).toBeInTheDocument();
   });
 
-  it("toggles side panels with Mod+B and Mod+Alt+B", () => {
+  it("toggles side panels with Mod+B and Mod+Alt+B (Mod is Ctrl+Shift off macOS)", () => {
     render(<App />);
-    fireEvent.keyDown(window, { code: "KeyB", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "B", ctrlKey: true, shiftKey: true });
     expect(useLayoutStore.getState().collapsed).toEqual({ left: true, right: false });
-    fireEvent.keyDown(window, { code: "KeyB", ctrlKey: true, altKey: true });
+    fireEvent.keyDown(window, { key: "B", ctrlKey: true, shiftKey: true, altKey: true });
     expect(useLayoutStore.getState().collapsed).toEqual({ left: true, right: true });
   });
 
-  it("leaves plain B alone so the terminal keeps its keys", () => {
+  it("leaves B and Ctrl+B alone so the terminal keeps its keys", () => {
     render(<App />);
-    fireEvent.keyDown(window, { code: "KeyB" });
+    fireEvent.keyDown(window, { key: "B" });
+    fireEvent.keyDown(window, { key: "B", ctrlKey: true });
     expect(useLayoutStore.getState().collapsed).toEqual({ left: false, right: false });
   });
 });
