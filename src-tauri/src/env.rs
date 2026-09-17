@@ -55,7 +55,7 @@ impl ShellEnv {
     }
 
     pub fn get(&self, key: &str) -> Option<&str> {
-        self.vars.get(key).map(String::as_str)
+        lookup(&self.vars, key, cfg!(windows))
     }
 
     /// Locate `program` the way a shell would, using *this* environment's `PATH`.
@@ -72,6 +72,19 @@ impl ShellEnv {
         self.get(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
             .map(PathBuf::from)
     }
+}
+
+/// Windows variable names are case-insensitive, and the ones that matter are not spelled the way
+/// everyone writes them: it is `Path` and `ComSpec` there, not `PATH` and `COMSPEC`.
+fn lookup<'a>(vars: &'a BTreeMap<String, String>, key: &str, ignore_case: bool) -> Option<&'a str> {
+    vars.get(key)
+        .or_else(|| {
+            ignore_case
+                .then(|| vars.iter().find(|(name, _)| name.eq_ignore_ascii_case(key)))
+                .flatten()
+                .map(|(_, value)| value)
+        })
+        .map(String::as_str)
 }
 
 /// Call first thing in `main`. When the login shell runs us with [`PRINT_ENV_FLAG`], dump the
@@ -239,6 +252,22 @@ mod tests {
         let mut truncated = BEGIN.to_vec();
         truncated.extend_from_slice(b"PATH=/a\0");
         assert!(parse_dump(&truncated).is_none());
+    }
+
+    #[test]
+    fn windows_style_lookups_ignore_case_but_prefer_an_exact_match() {
+        let vars: BTreeMap<String, String> = [("Path", "C:\\Windows"), ("ComSpec", "cmd.exe")]
+            .into_iter()
+            .map(|(k, v)| (k.to_owned(), v.to_owned()))
+            .collect();
+        assert_eq!(lookup(&vars, "PATH", true), Some("C:\\Windows"));
+        assert_eq!(lookup(&vars, "COMSPEC", true), Some("cmd.exe"));
+        assert_eq!(
+            lookup(&vars, "PATH", false),
+            None,
+            "Unix names are case-sensitive"
+        );
+        assert_eq!(lookup(&vars, "Path", false), Some("C:\\Windows"));
     }
 
     #[test]
