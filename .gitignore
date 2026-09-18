@@ -24,3 +24,12 @@ Thumbs.db
 
 # Downloaded CI artifacts (`just ci-artifacts`)
 artifacts/
+
+# Signing material — certificates and keys never belong in the repository.
+*.p12
+*.pfx
+*.cer
+*.pem
+*.key
+*.mobileprovision
+*.keystore
