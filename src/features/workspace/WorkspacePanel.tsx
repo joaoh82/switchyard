@@ -53,10 +53,14 @@ function WorkspaceTerminals(props: {
   const activeTab = useTerminalStore((s) => s.tabs.find((tab) => tab.id === activeId));
   const sessionError = useSessionsStore((s) => s.error);
 
-  // The history is what Resume and Fork are offered on; keep it fresh for the workspace in view.
+  // The history is what Resume and Fork are offered on; keep it fresh for the workspace in view:
+  // when it comes into view, and whenever a terminal opens or closes in it.
+  const tabCount = useTerminalStore(
+    (s) => s.tabs.filter((tab) => tab.workspaceId === workspace.id).length,
+  );
   useEffect(() => {
     void useSessionsStore.getState().load(workspace.id);
-  }, [workspace.id]);
+  }, [workspace.id, tabCount]);
   // Looking at a terminal is what clears its "finished, not seen yet" mark.
   useEffect(() => {
     if (activeId) useTerminalStore.getState().activate(activeId);

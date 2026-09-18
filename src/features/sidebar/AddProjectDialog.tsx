@@ -1,3 +1,4 @@
+import { useModalFocus } from "@/lib/useModalFocus";
 import { useEffect, useId, useRef, useState } from "react";
 import { native } from "@/lib/native";
 import { useProjectsStore } from "@/stores/projects";
@@ -7,6 +8,8 @@ import { enterWorkspace, openProjectFromDisk } from "./actions";
 export function AddProjectDialog({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<"choose" | "create">("choose");
   const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocus(dialogRef);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && onClose();
@@ -20,6 +23,8 @@ export function AddProjectDialog({ onClose }: { onClose: () => void }) {
       onPointerDown={(event) => event.target === event.currentTarget && onClose()}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

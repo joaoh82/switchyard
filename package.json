@@ -1,7 +1,13 @@
 {
   "name": "switchyard",
-  "private": true,
   "version": "0.1.0",
+  "description": "Run AI coding agents in parallel, each in its own git worktree",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joaoh82/switchyard.git"
+  },
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",

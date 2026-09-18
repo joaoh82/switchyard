@@ -1,0 +1,85 @@
+# Quick start
+
+From nothing to an agent working on your code, in about five minutes.
+
+## 1. Before you start
+
+Switchyard runs coding agents **you already have installed**. It does not bundle or replace them,
+and it never sees your API keys — each agent uses its own login. You need:
+
+- **git**
+- at least one agent CLI that works in your terminal. Out of the box Switchyard knows
+  [Claude Code](https://claude.com/claude-code) (`claude`), [Codex](https://github.com/openai/codex)
+  (`codex`), Grok (`grok`) and [OpenCode](https://opencode.ai) (`opencode`). Anything else that
+  runs in a terminal can be [added in settings](guide/settings.md#adding-your-own-harness).
+
+Check that it works where Switchyard will look for it — a fresh terminal:
+
+```sh
+claude --version
+```
+
+## 2. Install
+
+Download the latest build for your system from the
+[**Releases page**](https://github.com/joaoh82/switchyard/releases/latest).
+
+| System      | File                             | Notes                                                                                                                                               |
+| ----------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Linux**   | `.AppImage`, `.deb` or `.rpm`    | AppImage: `chmod +x Switchyard_*.AppImage` and run it.                                                                                              |
+| **macOS**   | `.dmg` (Apple Silicon and Intel) | Open it and drag Switchyard to Applications.                                                                                                        |
+| **Windows** | `-setup.exe` or `.msi`           | Builds are not code-signed yet, so SmartScreen warns: choose **More info → Run anyway**. Needs [Git for Windows](https://git-scm.com/download/win). |
+
+Prefer to build it yourself? See [CONTRIBUTING.md](../CONTRIBUTING.md) — it is `just setup && just build`.
+
+## 3. Add a project
+
+Open Switchyard and press **+** next to _Projects_ (or `Ctrl+Shift+O` / `⌘O`).
+
+- **Open a folder** — pick any git repository on your machine.
+- **Create a new project** — Switchyard makes the folder, runs `git init` and adds a first commit.
+
+Your project appears on the left with one entry under it, **local**: your repository exactly as it
+is on disk. Click it and you get a shell there.
+
+## 4. Start a workspace
+
+Press the **+** on the project row (or `Ctrl+Shift+N` / `⌘N`) and say what you want done:
+
+![The composer](images/composer.png)
+
+Pick the agent, optionally a model and effort level, and press **Enter**. Switchyard then:
+
+1. creates a new branch and a **git worktree** for it — a separate folder, so the agent cannot
+   disturb your own checkout or any other agent;
+2. starts the agent in that folder, in a real terminal, with your message as its first prompt.
+
+The first time an agent sees a new folder it may ask whether you trust it; answer in the terminal
+as you normally would.
+
+## 5. Watch, review, repeat
+
+![Switchyard at work](images/overview.png)
+
+- The **middle** is the agent's own terminal UI. Type to it exactly as you would anywhere else.
+- The **right** lists every file the agent has touched, updating live. Click one for the diff.
+- The **left** shows all your workspaces. Start another — in the same project or a different
+  one — and they run side by side. A pulsing dot means an agent is working; a solid one means it
+  is waiting for you.
+
+When the work is done, it is an ordinary git branch: review it, push it, open a pull request —
+from the agent, from a shell tab (`Ctrl+Shift+T`), or from your usual tools.
+
+## 6. Come back later
+
+Quit whenever you like. When you return, pick the workspace and press **Resume** — the agent
+reopens with the whole conversation intact.
+
+![Previous sessions](images/sessions.png)
+
+## Next
+
+- [Workspaces](guide/workspaces.md) — branches, archiving, cleaning up
+- [Terminals & sessions](guide/terminals-and-sessions.md) — resume, fork, notifications
+- [Settings & harnesses](guide/settings.md) — make an agent start the way you like
+- [Keyboard shortcuts](guide/shortcuts.md)

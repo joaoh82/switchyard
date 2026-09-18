@@ -132,9 +132,27 @@ _Notes:_
 
 ## M7 — Ship
 
-- Packaging: AppImage + deb + rpm + AUR; dmg (universal, signed, notarized); NSIS/MSI (signed).
-- Tauri updater. Crash/error log collection that stays local. First-run experience, docs site/README.
-- Licence, contribution guide, issue templates.
+Done:
+
+- [x] Licence: **GPL-3.0**. Dependency licences checked for compatibility (all MIT / Apache-2.0 /
+      BSD-style / MPL-2.0).
+- [x] Open-source groundwork: README with screenshots, quick start, a user guide for every part of
+      the app, CONTRIBUTING, Code of Conduct, SECURITY, issue and PR templates, `AGENTS.md`.
+- [x] Pre-publication audit of the repository and its whole history for secrets and personal data.
+- [x] Release workflow: a `v*` tag builds AppImage + deb + rpm, a universal dmg and NSIS + MSI
+      into a draft GitHub release; `just release <version>` cuts one. macOS signing and
+      notarization switch on when the Apple secrets are set. See [releasing](../releasing.md).
+
+To do:
+
+- [ ] Set the Apple signing secrets and cut **v0.1.0**.
+- [ ] Hands-on pass and benchmark rows on macOS and Windows hardware.
+- [ ] Auto-update (Tauri updater): needs an update-signing key whose private half must be kept
+      safe forever — losing it strands every installed copy — so it is a deliberate step.
+- [ ] Package managers: AUR, Homebrew cask, winget; Flatpak.
+- [ ] Windows code signing, if funding appears.
+- [ ] First-run experience: detect missing git / no agents installed and say what to do.
+- [ ] Project website.
 
 _Exit:_ v0.1.0 public release.
 

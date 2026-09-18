@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useModalFocus } from "@/lib/useModalFocus";
 import { buttonClass } from "./fields";
 import { GeneralSettings } from "./GeneralSettings";
 import { HarnessSettings } from "./HarnessSettings";
@@ -13,6 +14,8 @@ type Section = (typeof SECTIONS)[number][0];
 
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [section, setSection] = useState<Section>("harnesses");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocus(dialogRef);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -28,10 +31,12 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-6">
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="Settings"
-        className="flex h-full max-h-[46rem] w-full max-w-5xl flex-col rounded-lg border border-line bg-surface shadow-2xl shadow-black/50"
+        className="flex h-full max-h-[46rem] w-full max-w-5xl flex-col rounded-lg border border-line bg-surface shadow-2xl shadow-black/50 outline-none"
       >
         <header className="flex h-11 shrink-0 items-center gap-1 border-b border-line px-3">
           <h2 className="mr-4 font-semibold">Settings</h2>

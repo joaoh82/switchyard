@@ -1,6 +1,6 @@
 #!/bin/sh
 # Run the terminal benchmarks against a dev build and print one JSON result per run.
-# See docs/07-terminal-benchmarks.md.
+# See docs/design/07-terminal-benchmarks.md.
 #
 # usage: scripts/bench/run.sh            # both workloads x both renderers
 set -eu

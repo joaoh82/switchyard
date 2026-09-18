@@ -9,7 +9,7 @@ const SETTLE_MS = 400;
 /**
  * Dev-only: run a script in a terminal while recording how smoothly the webview keeps painting,
  * then report to the core (which prints the result and quits). Started with
- * `SWITCHYARD_BENCH='<script>' bun tauri dev`. See docs/07-terminal-benchmarks.md.
+ * `SWITCHYARD_BENCH='<script>' bun tauri dev`. See docs/design/07-terminal-benchmarks.md.
  */
 export function BenchRunner({ script, renderer }: { script: string; renderer: string | null }) {
   const [sessionId, setSessionId] = useState<SessionId | null>(null);

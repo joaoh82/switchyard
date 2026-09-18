@@ -43,8 +43,7 @@ settled.
 
 ## Project
 
-13. **Licence.** MIT / Apache-2.0 dual (Rust convention) vs something copyleft. Needed before the
-    repo goes public.
+13. ~~**Licence.**~~ **Settled 2026-09-18: GPL-3.0**, and the project is open source from v0.1.
 14. **Name availability.** Check `switchyard` on GitHub, crates.io, npm, the AUR and domains before
     investing in branding. Fallback app id: `dev.switchyard.app`.
 15. **Distribution.** Open source from the start? Flatpak/Snap in addition to AppImage/deb/rpm/AUR?

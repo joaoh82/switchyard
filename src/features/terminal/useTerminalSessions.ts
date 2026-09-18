@@ -36,10 +36,18 @@ export function handleHostEvent(event: HostEvent) {
       return;
     }
     case "exited": {
+      const tab = terminals.tabs.find((t) => t.id === event.id);
       terminals.markExited(event.id, event.exit);
       // The core has already settled the record; refresh what Resume and Fork are offered on.
-      const tab = useTerminalStore.getState().tabs.find((t) => t.id === event.id);
-      if (tab?.recordId) void useSessionsStore.getState().load(tab.workspaceId);
+      // A tab the user closed is gone by the time its process dies, so its workspace is no
+      // longer known here — refresh every history on screen rather than leave one stale.
+      const sessions = useSessionsStore.getState();
+      const stale = tab
+        ? tab.recordId
+          ? [tab.workspaceId]
+          : []
+        : Object.keys(sessions.byWorkspace);
+      for (const workspaceId of stale) void sessions.load(workspaceId);
     }
   }
 }

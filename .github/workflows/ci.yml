@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Pull requests from forks run this with a read-only token and no secrets.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HarnessDef, HarnessInfo, SettingsInfo } from "@/lib/ipc";
@@ -358,6 +358,21 @@ describe("Settings", () => {
     await user.click(save);
     expect(core.settingsSaveGeneral).toHaveBeenLastCalledWith(null, false);
     expect(useAppStore.getState().notifyWhenQuiet).toBe(false);
+  });
+
+  it("takes the keyboard when it opens and hands it back when it closes", async () => {
+    // Opened by shortcut, focus is still in the terminal, which swallows every key.
+    const terminal = document.createElement("textarea");
+    document.body.append(terminal);
+    terminal.focus();
+
+    const { user } = await openSettings();
+    expect(screen.getByRole("dialog", { name: "Settings" })).toHaveFocus();
+
+    expect(user).toBeDefined();
+    cleanup(); // closing unmounts the dialog
+    expect(terminal).toHaveFocus();
+    terminal.remove();
   });
 
   it("closes on Escape and on Done", async () => {

@@ -2,7 +2,7 @@
 //!
 //! A definition is a command plus argument templates for the few things Switchyard needs to do
 //! with an agent. Adding one must never need code — M4 makes these user-editable; until then the
-//! built-ins below are all there is. See `docs/04-harnesses.md`.
+//! built-ins below are all there is. See `docs/design/04-harnesses.md`.
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -184,7 +184,7 @@ fn strings(items: &[&str]) -> Vec<String> {
 }
 
 /// The harnesses Switchyard knows out of the box. Flags verified against each CLI's `--help`
-/// (versions in `docs/04-harnesses.md`); they move, so M4 lets users correct them.
+/// (versions in `docs/design/04-harnesses.md`); they move, so M4 lets users correct them.
 pub fn builtin() -> Vec<HarnessDef> {
     vec![
         HarnessDef {

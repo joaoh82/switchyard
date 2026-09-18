@@ -199,6 +199,18 @@ describe("host events", () => {
     expect(native.notify).not.toHaveBeenCalled();
   });
 
+  it("refreshes the history when the exit is for a tab that was already closed", () => {
+    core.sessionsList.mockResolvedValue([record("r1")]);
+    useSessionsStore.setState({ byWorkspace: { ws: [record("r1", { running: true })] } });
+    useTerminalStore.setState({ tabs: [], active: {} });
+    handleHostEvent({
+      type: "exited",
+      id: "closed-already",
+      exit: { code: 1, success: false, signal: null },
+    });
+    expect(core.sessionsList).toHaveBeenCalledWith("ws");
+  });
+
   it("refreshes the history when an agent exits, so Resume is on offer at once", () => {
     core.sessionsList.mockResolvedValue([record("r1")]);
     handleHostEvent({
@@ -226,6 +238,7 @@ describe("session wording", () => {
   it("distinguishes a clean end, a failure and an interruption", () => {
     expect(describeEnd(record("a"))).toBe("ended");
     expect(describeEnd(record("b", { exitCode: 2 }))).toBe("exited with code 2");
+    expect(describeEnd(record("d", { exitCode: 129 }))).toBe("stopped");
     expect(describeEnd(record("c", { interrupted: true, exitCode: null }))).toMatch(/interrupted/);
   });
 });

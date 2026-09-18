@@ -90,9 +90,14 @@ bundle types:
 build-debug:
     bun tauri build --debug --no-bundle
 
+# Cut a release: bump the version, commit, tag and push; CI builds a draft release (docs/releasing.md)
+[unix]
+release version:
+    scripts/release.sh {{ version }}
+
 # --- measure --------------------------------------------------------------------------------
 
-# Terminal rendering benchmarks (see docs/07-terminal-benchmarks.md)
+# Terminal rendering benchmarks (see docs/design/07-terminal-benchmarks.md)
 [unix]
 bench:
     scripts/bench/run.sh

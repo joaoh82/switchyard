@@ -153,7 +153,7 @@ export type CreatedWorkspace = {
 export type DevFlags = {
 	/**
 	 *  `SWITCHYARD_BENCH`: a shell script to run in a terminal while frame times are recorded;
-	 *  the app prints the result and exits. See `docs/07-terminal-benchmarks.md`.
+	 *  the app prints the result and exits. See `docs/design/07-terminal-benchmarks.md`.
 	 */
 	bench: string | null,
 	/**  `SWITCHYARD_RENDERER`: force the terminal renderer (`webgl` or `dom`). */

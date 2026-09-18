@@ -1,3 +1,4 @@
+import { useModalFocus } from "@/lib/useModalFocus";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Workspace } from "@/lib/ipc";
 import { useProjectsStore } from "@/stores/projects";
@@ -14,6 +15,8 @@ export function RenameDialog({
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
+  const dialogRef = useRef<HTMLFormElement>(null);
+  useModalFocus(dialogRef);
 
   useEffect(() => {
     inputRef.current?.select();
@@ -38,6 +41,8 @@ export function RenameDialog({
       onPointerDown={(event) => event.target === event.currentTarget && onClose()}
     >
       <form
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

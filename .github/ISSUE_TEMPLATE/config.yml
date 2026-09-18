@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/joaoh82/switchyard/blob/main/docs/README.md
+    about: The quick start, the user guide and troubleshooting.
+  - name: Report a security vulnerability
+    url: https://github.com/joaoh82/switchyard/security/advisories/new
+    about: Please report security problems privately, not as an issue.

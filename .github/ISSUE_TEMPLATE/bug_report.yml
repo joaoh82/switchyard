@@ -1,0 +1,46 @@
+name: Bug report
+description: Something does not work the way it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time. The more precisely we can reproduce it, the sooner it gets fixed.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+      placeholder: "1. Opened project X\n2. Pressed + and started a workspace with Claude Code\n3. Expected … but …"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Switchyard version
+      description: Bottom-right corner of the window, e.g. "Switchyard 0.1.0 · linux/x86_64".
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Linux, macOS, Windows]
+    validations:
+      required: true
+  - type: input
+    id: os-details
+    attributes:
+      label: OS details
+      description: Version, and on Linux the distribution and desktop or compositor (GNOME, KDE, Hyprland, X11 or Wayland…).
+      placeholder: Arch Linux, Hyprland (Wayland), NVIDIA
+  - type: input
+    id: harness
+    attributes:
+      label: Agent and version, if one is involved
+      placeholder: Claude Code 2.1.273
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Starting Switchyard from a terminal shows its log. Please remove anything private.
+      render: text
