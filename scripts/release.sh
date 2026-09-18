@@ -32,7 +32,12 @@ bunx prettier --write package.json src-tauri/tauri.conf.json >/dev/null
 cargo update --workspace --quiet   # refresh the workspace's own entries in Cargo.lock
 
 git add Cargo.toml Cargo.lock package.json src-tauri/tauri.conf.json
-git commit -m "Release $tag"
+# The code may already say this version (the first release does): then the tag alone is the release.
+if git diff --cached --quiet; then
+  echo "Version is already $version; tagging the current commit."
+else
+  git commit -m "Release $tag"
+fi
 git tag -a "$tag" -m "Switchyard $tag"
 git push origin main "$tag"
 
