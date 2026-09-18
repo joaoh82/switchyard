@@ -21,7 +21,8 @@ const control =
  * until then — and if any part of starting fails, nothing is left behind and the message stays.
  */
 export function Composer({ project }: { project: Project }) {
-  const harnesses = useHarnessStore((s) => s.harnesses);
+  const allHarnesses = useHarnessStore((s) => s.harnesses);
+  const harnesses = useMemo(() => allHarnesses.filter((h) => h.enabled), [allHarnesses]);
   const harnessesLoaded = useHarnessStore((s) => s.loaded);
   const ui = useProjectsStore((s) => s.ui);
   const last = useMemo(() => recall<LastPicks>(ui, picksKey(project.id), {}), [ui, project.id]);
@@ -229,8 +230,7 @@ export function Composer({ project }: { project: Project }) {
             </p>
           ) : harnessesLoaded && installed.length === 0 ? (
             <p role="alert" className="text-red-400">
-              None of the supported harnesses (claude, codex, grok, opencode) was found on your
-              PATH.
+              No enabled harness was found on your PATH. Check Settings → Harnesses.
             </p>
           ) : (
             <p className="text-ink-faint">

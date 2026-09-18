@@ -71,7 +71,7 @@ Two follow-ups landed right after M3, from dogfooding:
   become workspaces — ones made by hand, and ones orphaned when their project was removed and added
   again. Stale ("prunable") entries are skipped. This brought forward part of M6's reconciliation.
 
-## M4 — Harness settings
+## M4 — Harness settings ✅
 
 - Settings file + override model. Settings → Harnesses form, argv preview, PATH detection,
   Test launch, Restore defaults, custom harnesses.
@@ -79,6 +79,13 @@ Two follow-ups landed right after M3, from dogfooding:
 - Re-verify every default in [04-harnesses](04-harnesses.md) end-to-end on each OS.
 
 _Exit:_ a harness Switchyard has never heard of can be added and used without touching code.
+
+_Notes:_ the settings file stores only differences from the built-ins, so corrected defaults in a
+later version still reach everything the user left alone. Settings also cover the worktree folder
+and the branch prefix. Still open from this milestone: exercising every built-in end-to-end with a
+real prompt on macOS and Windows (flags are verified against `--help`; Claude Code is verified by
+hand on Linux), and the `stdin` transport against a harness that shows a trust or login dialog
+first — the paste would land in that dialog. WSL launch prefixes remain an open question.
 
 ## M5 — Right panel
 

@@ -9,7 +9,7 @@ and workspaces on the left, the live agent terminal in the middle, and the files
 It is modeled after Superset and Conductor, with one hard requirement they don't meet:
 **Linux, macOS and Windows are all first-class from day one.**
 
-> Status: early development — M0–M3 done: the core loop works (project → composer → worktree → harness in a terminal). M4 (harness settings) next. See the [roadmap](docs/05-roadmap.md).
+> Status: early development — M0–M4 done: the core loop works (project → composer → worktree → harness in a terminal) and harnesses are configurable. M5 (files & diff panel) next. See the [roadmap](docs/05-roadmap.md).
 
 ## Why "Switchyard"
 

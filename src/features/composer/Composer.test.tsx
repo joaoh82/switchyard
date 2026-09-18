@@ -35,6 +35,10 @@ const harness = (id: string, extra: Partial<HarnessInfo> = {}): HarnessInfo => (
   models: [],
   promptTransport: "argv",
   sessionIdMode: "assigned",
+  stdinReadyMs: 1500,
+  enabled: true,
+  builtin: true,
+  modified: false,
   resolvedPath: `/usr/bin/${id}`,
   ...extra,
 });
@@ -48,6 +52,7 @@ const session = (workspace: string) => ({
   size: { cols: 80, rows: 24 },
   labels: { workspace, harness: "claude" },
   state: { status: "running" as const },
+  hasOutput: true,
   idleMs: 0,
 });
 
@@ -186,6 +191,17 @@ describe("Composer", () => {
     expect(screen.getByRole("combobox", { name: "Effort" })).toHaveValue("low");
   });
 
+  it("does not offer harnesses that are switched off", async () => {
+    core.harnessesList.mockResolvedValue([harness("claude", { enabled: false }), harness("codex")]);
+    await renderComposer();
+    const picker = screen.getByRole("combobox", { name: "Harness" });
+    expect(
+      within(picker)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["CODEX"]);
+  });
+
   it("keeps the message and explains when starting fails", async () => {
     core.workspaceCreate.mockRejectedValue({
       code: "no_commits",
@@ -205,7 +221,7 @@ describe("Composer", () => {
     core.harnessesList.mockResolvedValue([harness("claude", { resolvedPath: null })]);
     await renderComposer();
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
-    expect(screen.getByRole("alert")).toHaveTextContent(/found on your PATH/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/No enabled harness was found/);
   });
 
   it("Escape cancels composing", async () => {

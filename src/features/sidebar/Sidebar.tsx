@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { PanelHeader } from "@/features/shell/PanelHeader";
 import { hasCore } from "@/lib/ipc";
 import { formatShortcut } from "@/lib/platform";
+import { useLayoutStore } from "@/stores/layout";
 import { useProjectsStore } from "@/stores/projects";
 import { AddProjectDialog } from "./AddProjectDialog";
 import { ProjectTree } from "./ProjectTree";
@@ -75,6 +76,16 @@ export function Sidebar() {
           </button>
         </div>
       )}
+      <div className="border-t border-line p-1">
+        <button
+          type="button"
+          title={`Settings (${formatShortcut(",")})`}
+          onClick={() => useLayoutStore.getState().setSettingsOpen(true)}
+          className="flex h-7 w-full items-center gap-2 rounded px-2 text-ink-muted hover:bg-raised hover:text-ink"
+        >
+          <span aria-hidden>⚙</span> Settings
+        </button>
+      </div>
       {adding && <AddProjectDialog onClose={() => setAdding(false)} />}
     </aside>
   );

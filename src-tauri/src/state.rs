@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use pty_host::PtyHost;
@@ -5,22 +6,26 @@ use tauri::{AppHandle, Manager};
 
 use crate::env::ShellEnv;
 use crate::error::{IpcError, IpcResult};
+use crate::settings::SettingsFile;
 use crate::store::Store;
 
 /// Everything the commands share. Managed by Tauri, created in `setup`.
 pub struct AppState {
-    pub host: PtyHost,
+    /// Shared with the threads that deliver prompts over stdin.
+    pub host: Arc<PtyHost>,
     pub store: Store,
+    pub settings: SettingsFile,
     /// Held while catching up with git, so overlapping project listings reconcile one at a time.
     pub reconciling: Mutex<()>,
     env: Mutex<Option<Arc<ShellEnv>>>,
 }
 
 impl AppState {
-    pub fn new(host: PtyHost, store: Store) -> Self {
+    pub fn new(host: PtyHost, store: Store, settings: SettingsFile) -> Self {
         Self {
-            host,
+            host: Arc::new(host),
             store,
+            settings,
             reconciling: Mutex::new(()),
             env: Mutex::new(None),
         }
@@ -32,6 +37,26 @@ impl AppState {
     pub fn env(&self) -> Arc<ShellEnv> {
         let mut slot = self.env.lock().unwrap_or_else(PoisonError::into_inner);
         Arc::clone(slot.get_or_insert_with(|| Arc::new(ShellEnv::resolve())))
+    }
+
+    /// Where worktrees go: the environment override (for tests and experiments), then the
+    /// setting, then `~/switchyard` — visible and short on purpose: people look into these
+    /// folders, and Windows paths are limited.
+    pub fn worktree_root(&self) -> IpcResult<PathBuf> {
+        if let Some(dir) = std::env::var_os("SWITCHYARD_WORKTREE_ROOT").filter(|d| !d.is_empty()) {
+            return Ok(PathBuf::from(dir));
+        }
+        if let Some(root) = self.settings.get().workspaces.worktree_root {
+            return Ok(PathBuf::from(root));
+        }
+        self.default_worktree_root()
+    }
+
+    pub fn default_worktree_root(&self) -> IpcResult<PathBuf> {
+        self.env()
+            .home_dir()
+            .map(|home| home.join("switchyard"))
+            .ok_or_else(|| IpcError::new("no_home", "Cannot determine your home directory."))
     }
 
     /// Re-run the login shell, e.g. after the user installed a harness.

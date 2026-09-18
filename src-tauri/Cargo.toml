@@ -27,6 +27,7 @@ pty-host = { path = "../crates/pty-host", features = ["specta"] }
 which = "8"
 rusqlite = { version = "0.40", features = ["bundled"] }
 dunce = "1"
+toml = "1"
 uuid = { version = "1", features = ["v4"] }
 thiserror = "2"
 tauri-plugin-dialog = "2"

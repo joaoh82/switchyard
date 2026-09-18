@@ -1,0 +1,298 @@
+//! User settings, in a TOML file people can read, edit, back up and diff.
+//!
+//! The file holds only what differs from the defaults. Two rules protect it: it is written
+//! atomically, and a file we could not parse is never overwritten — it is set aside first.
+
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard, PoisonError};
+
+use serde::{Deserialize, Serialize};
+
+use crate::harness::HarnessOverride;
+
+pub const DEFAULT_BRANCH_PREFIX: &str = "sy";
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Settings {
+    pub workspaces: WorkspaceSettings,
+    /// Overrides of built-in harnesses, and whole custom ones. See [`HarnessOverride`].
+    #[serde(rename = "harness", skip_serializing_if = "Vec::is_empty")]
+    pub harnesses: Vec<HarnessOverride>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WorkspaceSettings {
+    /// Where worktrees are created: `<root>/<project>/<workspace>`. `None` means
+    /// `~/switchyard`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worktree_root: Option<String>,
+    /// New branches are named `<prefix>/<workspace>`; empty means no prefix.
+    pub branch_prefix: String,
+}
+
+impl Default for WorkspaceSettings {
+    fn default() -> Self {
+        Self {
+            worktree_root: None,
+            branch_prefix: DEFAULT_BRANCH_PREFIX.to_owned(),
+        }
+    }
+}
+
+impl WorkspaceSettings {
+    /// The message to show if these cannot be saved.
+    pub fn validate(&self) -> Result<(), String> {
+        let prefix = &self.branch_prefix;
+        let bad_ref = prefix.starts_with(['/', '-', '.'])
+            || prefix.ends_with(['/', '.'])
+            || prefix.contains("..")
+            || prefix.contains("//")
+            || prefix.ends_with(".lock")
+            || prefix
+                .chars()
+                .any(|c| c.is_control() || c.is_whitespace() || "~^:?*[\\@{".contains(c));
+        if bad_ref {
+            return Err(format!("\"{prefix}\" cannot be part of a git branch name."));
+        }
+        if let Some(root) = &self.worktree_root {
+            if !Path::new(root).is_absolute() {
+                return Err("The worktree folder must be an absolute path.".into());
+            }
+        }
+        Ok(())
+    }
+
+    /// The full branch name for a workspace called `name`.
+    pub fn branch_for(&self, name: &str) -> String {
+        if self.branch_prefix.is_empty() {
+            name.to_owned()
+        } else {
+            format!("{}/{name}", self.branch_prefix)
+        }
+    }
+
+    /// The workspace name a branch suggests: the branch without our prefix.
+    pub fn name_from_branch<'a>(&self, branch: &'a str) -> &'a str {
+        if self.branch_prefix.is_empty() {
+            return branch;
+        }
+        branch
+            .strip_prefix(&self.branch_prefix)
+            .and_then(|rest| rest.strip_prefix('/'))
+            .unwrap_or(branch)
+    }
+}
+
+pub struct SettingsFile {
+    path: PathBuf,
+    state: Mutex<Loaded>,
+}
+
+struct Loaded {
+    settings: Settings,
+    /// Why the file on disk was not used, if it was not.
+    problem: Option<String>,
+}
+
+impl SettingsFile {
+    /// Read `path`. A missing file means defaults; an unreadable one means defaults *and* a
+    /// reported problem, with the file left untouched until the user saves something.
+    pub fn load(path: PathBuf) -> Self {
+        let (settings, problem) = match std::fs::read_to_string(&path) {
+            Ok(text) => match toml::from_str::<Settings>(&text) {
+                Ok(settings) => (settings, None),
+                Err(error) => (
+                    Settings::default(),
+                    Some(format!("{} could not be read: {error}", path.display())),
+                ),
+            },
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                (Settings::default(), None)
+            }
+            Err(error) => (
+                Settings::default(),
+                Some(format!("{} could not be read: {error}", path.display())),
+            ),
+        };
+        Self {
+            path,
+            state: Mutex::new(Loaded { settings, problem }),
+        }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn get(&self) -> Settings {
+        self.lock().settings.clone()
+    }
+
+    pub fn problem(&self) -> Option<String> {
+        self.lock().problem.clone()
+    }
+
+    /// Change the settings and write them out. Nothing changes in memory unless the write
+    /// succeeded.
+    pub fn update(&self, change: impl FnOnce(&mut Settings)) -> std::io::Result<Settings> {
+        let mut state = self.lock();
+        let mut next = state.settings.clone();
+        change(&mut next);
+
+        if state.problem.is_some() && self.path.exists() {
+            // Never destroy a file we failed to understand; the user may want their edits back.
+            std::fs::rename(&self.path, self.path.with_extension("toml.unreadable"))?;
+        }
+        write_atomically(&self.path, &render(&next))?;
+        state.settings = next.clone();
+        state.problem = None;
+        Ok(next)
+    }
+
+    fn lock(&self) -> MutexGuard<'_, Loaded> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+fn render(settings: &Settings) -> String {
+    let body = toml::to_string_pretty(settings).expect("settings are plain data");
+    format!(
+        "# Switchyard settings. Edited by the app — comments here are not preserved.\n\
+         # Only values that differ from the defaults are stored; delete an entry to restore it.\n\n{body}"
+    )
+}
+
+/// Write to a sibling file, then rename over the target, so a crash never leaves half a file.
+fn write_atomically(path: &Path, contents: &str) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let temporary = path.with_extension("toml.tmp");
+    std::fs::write(&temporary, contents)?;
+    std::fs::rename(&temporary, path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn file() -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config").join("settings.toml");
+        (dir, path)
+    }
+
+    #[test]
+    fn a_missing_file_means_defaults_and_is_not_created_by_reading() {
+        let (_dir, path) = file();
+        let settings = SettingsFile::load(path.clone());
+        assert_eq!(settings.get(), Settings::default());
+        assert_eq!(settings.get().workspaces.branch_prefix, "sy");
+        assert_eq!(settings.problem(), None);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn changes_survive_a_reload_and_only_differences_are_written() {
+        let (_dir, path) = file();
+        SettingsFile::load(path.clone())
+            .update(|s| {
+                s.workspaces.branch_prefix = "wip".into();
+                s.harnesses.push(HarnessOverride {
+                    id: "claude".into(),
+                    command: Some("/opt/claude".into()),
+                    ..Default::default()
+                });
+            })
+            .unwrap();
+
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            text.contains("branch_prefix = \"wip\"") && text.contains("[[harness]]"),
+            "{text}"
+        );
+        assert!(
+            !text.contains("worktree_root") && !text.contains("model_args"),
+            "{text}"
+        );
+
+        let reloaded = SettingsFile::load(path).get();
+        assert_eq!(reloaded.workspaces.branch_prefix, "wip");
+        assert_eq!(
+            reloaded.harnesses[0].command.as_deref(),
+            Some("/opt/claude")
+        );
+    }
+
+    #[test]
+    fn a_hand_written_file_with_unknown_keys_and_gaps_still_loads() {
+        let (_dir, path) = file();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            "future_feature = true\n\n[[harness]]\nid = \"aider\"\ncommand = \"aider\"\nprompt_args = [\"--message\", \"{prompt}\"]\n",
+        )
+        .unwrap();
+        let settings = SettingsFile::load(path);
+        assert_eq!(settings.problem(), None);
+        assert_eq!(settings.get().harnesses[0].id, "aider");
+        assert_eq!(settings.get().workspaces, WorkspaceSettings::default());
+    }
+
+    #[test]
+    fn a_broken_file_is_reported_and_set_aside_not_overwritten() {
+        let (_dir, path) = file();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "[workspaces\nbranch_prefix = ").unwrap();
+
+        let settings = SettingsFile::load(path.clone());
+        assert!(settings.problem().unwrap().contains("could not be read"));
+        assert_eq!(settings.get(), Settings::default());
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "[workspaces\nbranch_prefix = ",
+            "untouched"
+        );
+
+        settings
+            .update(|s| s.workspaces.branch_prefix = "x".into())
+            .unwrap();
+        assert_eq!(settings.problem(), None);
+        let kept = std::fs::read_to_string(path.with_extension("toml.unreadable")).unwrap();
+        assert_eq!(kept, "[workspaces\nbranch_prefix = ");
+        assert!(std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("branch_prefix = \"x\""));
+    }
+
+    #[test]
+    fn branch_prefixes_are_checked_and_applied() {
+        let with = |prefix: &str| WorkspaceSettings {
+            branch_prefix: prefix.into(),
+            ..Default::default()
+        };
+        for ok in ["sy", "", "joao/wip", "feature"] {
+            assert!(with(ok).validate().is_ok(), "{ok:?}");
+        }
+        for bad in ["has space", "/lead", "trail/", "a..b", "x~y", "-dash", "q?"] {
+            assert!(with(bad).validate().is_err(), "{bad:?}");
+        }
+        assert_eq!(with("sy").branch_for("fix"), "sy/fix");
+        assert_eq!(with("").branch_for("fix"), "fix");
+        assert_eq!(with("sy").name_from_branch("sy/fix"), "fix");
+        assert_eq!(
+            with("sy").name_from_branch("system"),
+            "system",
+            "a prefix is a whole path part"
+        );
+        assert_eq!(with("").name_from_branch("sy/fix"), "sy/fix");
+
+        let relative = WorkspaceSettings {
+            worktree_root: Some("relative/dir".into()),
+            ..Default::default()
+        };
+        assert!(relative.validate().is_err());
+    }
+}

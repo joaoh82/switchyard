@@ -1,12 +1,14 @@
 import { formatShortcut } from "@/lib/platform";
 import { useTerminalStore, type TerminalTab } from "@/stores/terminals";
-import { bareHarness, QUICK_LAUNCH } from "./quickLaunch";
+import { launchable, useHarnessStore } from "@/stores/harnesses";
+import { bareHarness } from "./quickLaunch";
 
 export function TerminalTabs({ workspaceId }: { workspaceId: string }) {
   const allTabs = useTerminalStore((s) => s.tabs);
   const activeId = useTerminalStore((s) => s.active[workspaceId]);
   const open = useTerminalStore((s) => s.open);
   const tabs = allTabs.filter((tab) => tab.workspaceId === workspaceId);
+  const harnesses = launchable(useHarnessStore((s) => s.harnesses));
 
   return (
     <div className="flex h-9 shrink-0 items-stretch border-b border-line bg-surface">
@@ -25,14 +27,15 @@ export function TerminalTabs({ workspaceId }: { workspaceId: string }) {
         +
       </button>
       <div className="ml-auto flex items-center gap-1 pr-2">
-        {QUICK_LAUNCH.map((program) => (
+        {harnesses.map((harness) => (
           <button
-            key={program}
+            key={harness.id}
             type="button"
-            onClick={() => void open(workspaceId, bareHarness(program))}
+            title={`Start ${harness.label} here`}
+            onClick={() => void open(workspaceId, bareHarness(harness.id))}
             className="rounded px-2 py-0.5 text-[11px] text-ink-faint hover:bg-raised hover:text-ink"
           >
-            {program}
+            {harness.id}
           </button>
         ))}
       </div>

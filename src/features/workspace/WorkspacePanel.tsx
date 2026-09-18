@@ -1,11 +1,12 @@
 import { Composer } from "@/features/composer/Composer";
 import { BenchRunner } from "@/features/terminal/BenchRunner";
-import { bareHarness, QUICK_LAUNCH } from "@/features/terminal/quickLaunch";
+import { bareHarness } from "@/features/terminal/quickLaunch";
 import { TerminalTabs } from "@/features/terminal/TerminalTabs";
 import { TerminalView } from "@/features/terminal/TerminalView";
 import { useTerminalSessions } from "@/features/terminal/useTerminalSessions";
 import type { HarnessRequest, Project, Workspace } from "@/lib/ipc";
 import { useAppStore } from "@/stores/app";
+import { launchable, useHarnessStore } from "@/stores/harnesses";
 import { useProjectsStore, useSelectedWorkspace } from "@/stores/projects";
 import { useTerminalStore } from "@/stores/terminals";
 
@@ -115,6 +116,7 @@ function Welcome() {
 }
 
 function LaunchButtons({ onLaunch }: { onLaunch: (harness?: HarnessRequest) => void }) {
+  const harnesses = launchable(useHarnessStore((s) => s.harnesses));
   const button =
     "rounded border border-line px-3 py-1 text-ink-muted hover:border-accent hover:text-ink";
   return (
@@ -122,7 +124,7 @@ function LaunchButtons({ onLaunch }: { onLaunch: (harness?: HarnessRequest) => v
       <button type="button" onClick={() => onLaunch()} className={button}>
         shell
       </button>
-      {QUICK_LAUNCH.map((id) => (
+      {harnesses.map(({ id }) => (
         <button key={id} type="button" onClick={() => onLaunch(bareHarness(id))} className={button}>
           {id}
         </button>

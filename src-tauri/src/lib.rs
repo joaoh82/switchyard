@@ -9,6 +9,7 @@ mod error;
 mod git;
 mod harness;
 mod projects;
+mod settings;
 mod state;
 mod store;
 mod terminal;
@@ -36,6 +37,12 @@ fn ipc_builder() -> Builder<tauri::Wry> {
             projects::commands::ui_state_load,
             projects::commands::ui_state_save,
             workspaces::commands::harnesses_list,
+            workspaces::commands::harness_save,
+            workspaces::commands::harness_reset,
+            workspaces::commands::harness_preview,
+            workspaces::commands::harness_test,
+            workspaces::commands::settings_get,
+            workspaces::commands::settings_save_workspaces,
             workspaces::commands::project_branches,
             workspaces::commands::workspace_create,
             workspaces::commands::workspace_delete,
@@ -91,7 +98,14 @@ pub fn run() {
             let database = data_dir.join("switchyard.db");
             let store = store::Store::open(&database)
                 .map_err(|e| format!("cannot open {}: {e}", database.display()))?;
-            app.manage(state::AppState::new(host, store));
+            // Settings sit next to the database when the data dir is overridden, otherwise in
+            // the OS config directory.
+            let config_dir = match std::env::var_os("SWITCHYARD_DATA_DIR") {
+                Some(dir) if !dir.is_empty() => std::path::PathBuf::from(dir),
+                _ => app.path().app_config_dir()?,
+            };
+            let settings = settings::SettingsFile::load(config_dir.join("settings.toml"));
+            app.manage(state::AppState::new(host, store, settings));
 
             // Warm the login-shell environment now, so the first terminal doesn't wait for it.
             let handle = app.handle().clone();

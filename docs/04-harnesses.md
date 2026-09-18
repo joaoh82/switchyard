@@ -66,14 +66,21 @@ every harness needing hand-written templates.
 ### Prompt transport
 
 - **`argv`** — the prompt is substituted into `prompt_args`. Simple and reliable. Default.
-- **`stdin`** — the harness is started without the prompt, then the prompt is written to the PTY as
-  a bracketed paste followed by Enter once the TUI is ready. For harnesses with no prompt argument,
-  and for very long prompts: Windows caps a command line at ~32 K characters.
-  "Ready" detection is the fiddly part: wait for first output then a short quiet period, with a
-  configurable delay as the fallback. Needs care per harness.
+- **`stdin`** — the harness is started without the prompt, which is then pasted into the terminal
+  and submitted. For harnesses with no prompt argument.
 
-Automatic fallback: if transport is `argv` and the built command line would exceed the platform
-limit, switch to `stdin` for that launch.
+  "Ready" means: the program has printed something, then stayed quiet for `stdin_ready_ms`
+  (default 1500) — a TUI that has drawn itself and is waiting. We never parse what it printed. If
+  it never settles, the prompt is pasted after 20 s anyway rather than lost; if it exits first,
+  nothing is sent. The paste is bracketed when the program enabled bracketed paste (so newlines
+  stay part of the message), otherwise sent as typed input; Enter follows 150 ms later, because
+  some TUIs drop an Enter that arrives glued to a paste.
+
+  Limitation: if the harness opens with a dialog (folder trust, login), the paste lands there.
+
+Automatic fallback: a prompt longer than 24 000 characters on Windows (100 000 elsewhere) is
+delivered over `stdin` even for an `argv` harness, because the OS would otherwise refuse to start
+the process at all.
 
 ### Session ids
 
@@ -114,11 +121,42 @@ Notes:
 - Permission / approval modes (`--permission-mode`, `-a`, `--always-approve`, `--auto`) are
   deliberately **not** in the defaults. Users who want them add them to `base_args`.
 
-## Settings UI
+## Settings
 
-- List of harnesses (built-ins + custom), each with an enabled toggle and a "found at <path>" /
-  "not found on PATH" indicator.
-- Form fields per the definition above. Args fields show a live **preview of the exact argv** that
-  would be run for a sample prompt — the fastest way to debug a template.
-- **Test launch** opens the harness in a scratch terminal.
-- **Restore defaults** per harness. **Add custom harness** for anything else that runs in a terminal.
+**Settings → Harnesses** (`Mod+,`). The list shows every harness with a status dot (installed /
+disabled / not found) and whether it is `modified` or `custom`. The form edits one definition:
+
+- Argument groups are edited as one shell-like line each (`-c 'key="{effort}"'`). That is notation
+  only — what is stored and run is the array, and no shell is involved. An open quote is reported
+  on the field and blocks saving.
+- **What will run** shows the exact `start`, `resume` and `fork` command lines for sample values,
+  computed by the core from the unsaved form — the fastest way to debug a template.
+- **Test launch** starts the unsaved definition, with no prompt, in the home directory.
+- **Restore defaults** (built-ins) deletes the override. **Delete harness** removes a custom one.
+- **Add custom harness** for anything else that runs in a terminal.
+
+### The file
+
+`settings.toml` lives in the OS config directory (next to the database when
+`SWITCHYARD_DATA_DIR` is set). It is meant to be readable and hand-editable:
+
+```toml
+[workspaces]
+worktree_root = "/data/worktrees"      # default: ~/switchyard
+branch_prefix = "sy"                   # "" for none
+
+[[harness]]                            # a built-in: only what differs is stored
+id = "claude"
+base_args = ["--append-system-prompt", "Be brief."]
+
+[[harness]]                            # an id Switchyard does not ship is a custom harness
+id = "aider"
+label = "Aider"
+command = "aider"
+prompt_args = ["--message", "{prompt}"]
+```
+
+Unknown keys are ignored, so a file from a newer version still loads. It is written atomically.
+A file that cannot be parsed is **never overwritten**: defaults are used, the problem is shown in
+Settings, and the first save moves the file aside as `settings.toml.unreadable`. Comments are not
+preserved when the app saves.

@@ -20,6 +20,22 @@ export const commands = {
 	uiStateLoad: () => typedError<{ [key in string]: string }, IpcError>(__TAURI_INVOKE("ui_state_load")),
 	uiStateSave: (key: string, value: string) => typedError<null, IpcError>(__TAURI_INVOKE("ui_state_save", { key, value })),
 	harnessesList: () => typedError<HarnessInfo[], IpcError>(__TAURI_INVOKE("harnesses_list")),
+	/**
+	 *  Save a harness definition. For a built-in only the differences from the shipped definition
+	 *  are stored; saving one identical to it removes the override.
+	 */
+	harnessSave: (def: HarnessDef) => typedError<HarnessInfo[], IpcError>(__TAURI_INVOKE("harness_save", { def })),
+	/**  Restore a built-in to its shipped definition, or delete a custom harness. */
+	harnessReset: (id: string) => typedError<HarnessInfo[], IpcError>(__TAURI_INVOKE("harness_reset", { id })),
+	/**  What would run for this — possibly unsaved — definition, with sample values filled in. */
+	harnessPreview: (def: HarnessDef) => typedError<HarnessPreview, IpcError>(__TAURI_INVOKE("harness_preview", { def })),
+	/**
+	 *  Start this — possibly unsaved — definition in the home directory, with no prompt, to see
+	 *  whether it comes up. The caller shows the session and closes it.
+	 */
+	harnessTest: (def: HarnessDef, size: TermSize) => typedError<SessionInfo, IpcError>(__TAURI_INVOKE("harness_test", { def, size })),
+	settingsGet: () => typedError<SettingsInfo, IpcError>(__TAURI_INVOKE("settings_get")),
+	settingsSaveWorkspaces: (workspaces: WorkspaceSettingsDto) => typedError<SettingsInfo, IpcError>(__TAURI_INVOKE("settings_save_workspaces", { workspaces })),
 	projectBranches: (projectId: string) => typedError<BranchList, IpcError>(__TAURI_INVOKE("project_branches", { projectId })),
 	/**
 	 *  The core loop: make a worktree — on a new branch, or for an existing one — and start a harness in it with the user's
@@ -137,13 +153,34 @@ export type HarnessDef = {
 	models: string[],
 	promptTransport: PromptTransport,
 	sessionIdMode: SessionIdMode,
+	/**
+	 *  With the `stdin` transport: how long the harness must have been quiet, after printing
+	 *  something, before the prompt is pasted.
+	 */
+	stdinReadyMs: number,
+	/**  Disabled harnesses stay configured but are not offered. */
+	enabled: boolean,
 };
 
 /**  A harness definition plus whether its command can be found on this machine. */
 export type HarnessInfo = {
 	/**  Where `command` resolved to on the user's `PATH`; `None` if it is not installed. */
 	resolvedPath: string | null,
+	/**  Ships with Switchyard (as opposed to one the user added). */
+	builtin: boolean,
+	/**  A built-in whose definition the user has changed. */
+	modified: boolean,
 } & HarnessDef;
+
+/**  The exact command lines a definition produces, for the settings form to show. */
+export type HarnessPreview = {
+	resolvedPath: string | null,
+	start: string[],
+	resume: string[],
+	fork: string[],
+	/**  Why this definition cannot be saved as it stands, if it cannot. */
+	problem: string | null,
+};
 
 /**  Which harness to start, and with what. */
 export type HarnessRequest = {
@@ -203,8 +240,8 @@ export type PromptTransport =
 /**  The prompt is an argument. Simple and reliable. */
 "argv" | 
 /**
- *  The prompt is typed into the terminal once the harness is up. Arrives with M4; no
- *  built-in needs it.
+ *  The prompt is pasted into the terminal once the harness has started and gone quiet. For
+ *  harnesses with no prompt argument, and for prompts too long for a command line.
  */
 "stdin";
 
@@ -242,6 +279,11 @@ export type SessionInfo = {
 	labels: { [key in string]: string },
 	state: SessionState,
 	/**
+	 *  Whether the program has printed anything yet. With `idle_ms` this tells "still starting"
+	 *  from "started and now waiting", without anyone parsing what it printed.
+	 */
+	hasOutput: boolean,
+	/**
 	 *  Milliseconds since the session last produced output (saturating). Drives "busy / waiting" indicators
 	 *  without anyone having to parse what the program printed.
 	 */
@@ -249,6 +291,16 @@ export type SessionInfo = {
 };
 
 export type SessionState = { status: "running" } | { status: "exited"; exit: ExitInfo };
+
+export type SettingsInfo = {
+	workspaces: WorkspaceSettingsDto,
+	defaultWorktreeRoot: string,
+	/**  Set while `SWITCHYARD_WORKTREE_ROOT` overrides the setting. */
+	worktreeRootOverride: string | null,
+	filePath: string,
+	/**  Why the settings file was ignored, if it was (it is kept, never overwritten). */
+	problem: string | null,
+};
 
 export type SpawnRequest = {
 	/**  Program to run. `None` starts the user's shell. */
@@ -288,6 +340,12 @@ export type WorkspaceKind =
 "local" | 
 /**  A git worktree on its own branch. */
 "worktree";
+
+export type WorkspaceSettingsDto = {
+	/**  `None` uses `default_worktree_root`. */
+	worktreeRoot: string | null,
+	branchPrefix: string,
+};
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

@@ -23,6 +23,42 @@ pub struct HarnessInfo {
     pub def: HarnessDef,
     /// Where `command` resolved to on the user's `PATH`; `None` if it is not installed.
     pub resolved_path: Option<String>,
+    /// Ships with Switchyard (as opposed to one the user added).
+    pub builtin: bool,
+    /// A built-in whose definition the user has changed.
+    pub modified: bool,
+}
+
+/// The exact command lines a definition produces, for the settings form to show.
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessPreview {
+    pub resolved_path: Option<String>,
+    pub start: Vec<String>,
+    pub resume: Vec<String>,
+    pub fork: Vec<String>,
+    /// Why this definition cannot be saved as it stands, if it cannot.
+    pub problem: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSettingsDto {
+    /// `None` uses `default_worktree_root`.
+    pub worktree_root: Option<String>,
+    pub branch_prefix: String,
+}
+
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsInfo {
+    pub workspaces: WorkspaceSettingsDto,
+    pub default_worktree_root: String,
+    /// Set while `SWITCHYARD_WORKTREE_ROOT` overrides the setting.
+    pub worktree_root_override: Option<String>,
+    pub file_path: String,
+    /// Why the settings file was ignored, if it was (it is kept, never overwritten).
+    pub problem: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Type)]
@@ -55,34 +91,189 @@ pub struct CreatedWorkspace {
     pub session: SessionInfo,
 }
 
-fn worktree_root(state: &AppState) -> IpcResult<PathBuf> {
-    if let Some(dir) = std::env::var_os("SWITCHYARD_WORKTREE_ROOT").filter(|d| !d.is_empty()) {
-        return Ok(PathBuf::from(dir));
-    }
-    // Visible and short on purpose: people look into these folders, and Windows paths are
-    // limited. Becomes a setting in M4.
-    state
-        .env()
-        .home_dir()
-        .map(|home| home.join("switchyard"))
-        .ok_or_else(|| IpcError::new("no_home", "Cannot determine your home directory."))
+#[tauri::command]
+#[specta::specta]
+pub async fn harnesses_list(app: AppHandle) -> IpcResult<Vec<HarnessInfo>> {
+    blocking(app, |state| Ok(list_harnesses(state))).await
+}
+
+fn list_harnesses(state: &AppState) -> Vec<HarnessInfo> {
+    let env = state.env();
+    let cwd = std::env::current_dir().unwrap_or_default();
+    harness::resolve_all(&state.settings.get().harnesses)
+        .into_iter()
+        .map(|resolved| HarnessInfo {
+            resolved_path: env
+                .find_program(&resolved.def.command, &cwd)
+                .map(|path| path.to_string_lossy().into_owned()),
+            def: resolved.def,
+            builtin: resolved.builtin,
+            modified: resolved.modified,
+        })
+        .collect()
+}
+
+fn save_failed(error: std::io::Error) -> IpcError {
+    IpcError::new(
+        "settings_write_failed",
+        format!("Could not save settings: {error}"),
+    )
+}
+
+/// Save a harness definition. For a built-in only the differences from the shipped definition
+/// are stored; saving one identical to it removes the override.
+#[tauri::command]
+#[specta::specta]
+pub async fn harness_save(app: AppHandle, def: HarnessDef) -> IpcResult<Vec<HarnessInfo>> {
+    blocking(app, move |state| {
+        harness::validate(&def).map_err(|why| IpcError::new("invalid_harness", why))?;
+        let base = harness::builtin()
+            .into_iter()
+            .find(|builtin| builtin.id == def.id)
+            .unwrap_or_else(|| HarnessDef::custom(&def.id));
+        let is_builtin = harness::builtin()
+            .iter()
+            .any(|builtin| builtin.id == def.id);
+        let entry = harness::HarnessOverride::between(&base, &def);
+        state
+            .settings
+            .update(|settings| {
+                settings.harnesses.retain(|existing| existing.id != def.id);
+                // A custom harness needs its entry to exist at all; a built-in only to differ.
+                if !is_builtin || !entry.is_empty() {
+                    settings.harnesses.push(entry);
+                }
+            })
+            .map_err(save_failed)?;
+        Ok(list_harnesses(state))
+    })
+    .await
+}
+
+/// Restore a built-in to its shipped definition, or delete a custom harness.
+#[tauri::command]
+#[specta::specta]
+pub async fn harness_reset(app: AppHandle, id: String) -> IpcResult<Vec<HarnessInfo>> {
+    blocking(app, move |state| {
+        state
+            .settings
+            .update(|settings| settings.harnesses.retain(|existing| existing.id != id))
+            .map_err(save_failed)?;
+        Ok(list_harnesses(state))
+    })
+    .await
+}
+
+/// What would run for this — possibly unsaved — definition, with sample values filled in.
+#[tauri::command]
+#[specta::specta]
+pub async fn harness_preview(app: AppHandle, def: HarnessDef) -> IpcResult<HarnessPreview> {
+    blocking(app, move |state| {
+        let sample = harness::LaunchValues {
+            prompt: Some("Fix the login bug".into()),
+            model: Some(
+                def.models
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "model-name".into()),
+            ),
+            effort: def.efforts.first().cloned(),
+            session_id: Some("0f8fad5b-d9cb-469f-a165-70867728950e".into()),
+        };
+        let with_command = |args: Vec<String>| {
+            std::iter::once(def.command.clone())
+                .chain(args)
+                .collect::<Vec<_>>()
+        };
+        let cwd = std::env::current_dir().unwrap_or_default();
+        Ok(HarnessPreview {
+            resolved_path: state
+                .env()
+                .find_program(&def.command, &cwd)
+                .map(|path| path.to_string_lossy().into_owned()),
+            start: with_command(def.start_args(&sample)),
+            resume: with_command(def.continue_args(&sample, false)),
+            fork: with_command(def.continue_args(&sample, true)),
+            problem: harness::validate(&def).err(),
+        })
+    })
+    .await
+}
+
+/// Start this — possibly unsaved — definition in the home directory, with no prompt, to see
+/// whether it comes up. The caller shows the session and closes it.
+#[tauri::command]
+#[specta::specta]
+pub async fn harness_test(
+    app: AppHandle,
+    def: HarnessDef,
+    size: TermSize,
+) -> IpcResult<SessionInfo> {
+    blocking(app, move |state| {
+        let session_id = (def.session_id_mode == harness::SessionIdMode::Assigned)
+            .then(|| uuid::Uuid::new_v4().to_string());
+        let args = def.start_args(&harness::LaunchValues {
+            session_id,
+            ..Default::default()
+        });
+        let resolved = crate::terminal::ResolvedLaunch {
+            program: Some(def.command),
+            args,
+            labels: Default::default(),
+            paste_when_ready: None,
+        };
+        crate::terminal::start(state, resolved, None, size)
+    })
+    .await
+}
+
+fn settings_info(state: &AppState) -> IpcResult<SettingsInfo> {
+    let workspaces = state.settings.get().workspaces;
+    Ok(SettingsInfo {
+        workspaces: WorkspaceSettingsDto {
+            worktree_root: workspaces.worktree_root,
+            branch_prefix: workspaces.branch_prefix,
+        },
+        default_worktree_root: state
+            .default_worktree_root()?
+            .to_string_lossy()
+            .into_owned(),
+        worktree_root_override: std::env::var("SWITCHYARD_WORKTREE_ROOT")
+            .ok()
+            .filter(|dir| !dir.is_empty()),
+        file_path: state.settings.path().to_string_lossy().into_owned(),
+        problem: state.settings.problem(),
+    })
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn harnesses_list(app: AppHandle) -> IpcResult<Vec<HarnessInfo>> {
-    blocking(app, |state| {
-        let env = state.env();
-        let cwd = std::env::current_dir().unwrap_or_default();
-        Ok(harness::builtin()
-            .into_iter()
-            .map(|def| HarnessInfo {
-                resolved_path: env
-                    .find_program(&def.command, &cwd)
-                    .map(|path| path.to_string_lossy().into_owned()),
-                def,
-            })
-            .collect())
+pub async fn settings_get(app: AppHandle) -> IpcResult<SettingsInfo> {
+    blocking(app, settings_info).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn settings_save_workspaces(
+    app: AppHandle,
+    workspaces: WorkspaceSettingsDto,
+) -> IpcResult<SettingsInfo> {
+    blocking(app, move |state| {
+        let wanted = crate::settings::WorkspaceSettings {
+            worktree_root: workspaces
+                .worktree_root
+                .map(|root| root.trim().to_owned())
+                .filter(|root| !root.is_empty()),
+            branch_prefix: workspaces.branch_prefix.trim().to_owned(),
+        };
+        wanted
+            .validate()
+            .map_err(|why| IpcError::new("invalid_settings", why))?;
+        state
+            .settings
+            .update(|settings| settings.workspaces = wanted)
+            .map_err(save_failed)?;
+        settings_info(state)
     })
     .await
 }
@@ -122,15 +313,18 @@ pub async fn workspace_create(
 ) -> IpcResult<CreatedWorkspace> {
     blocking(app, move |state| {
         // Fail before touching git if the harness cannot possibly start.
-        harness::find(&request.harness.id)
+        harness::find(&request.harness.id, &state.settings.get().harnesses)
+            .filter(|def| def.enabled)
             .ok_or_else(|| IpcError::new("unknown_harness", "That harness is not configured."))?;
 
         let git = Git::new(&state.env())?;
-        let root = worktree_root(state)?;
+        let root = state.worktree_root()?;
+        let settings = state.settings.get();
         let workspaces = Workspaces {
             store: &state.store,
             git: &git,
             worktree_root: &root,
+            settings: &settings.workspaces,
         };
         let prompt = request.harness.prompt.clone().unwrap_or_default();
         let row = match request.existing_branch.as_deref() {
@@ -169,11 +363,13 @@ pub async fn workspace_create(
 pub async fn workspace_delete(app: AppHandle, id: String, force: bool) -> IpcResult<()> {
     blocking(app, move |state| {
         let git = Git::new(&state.env())?;
-        let root = worktree_root(state)?;
+        let root = state.worktree_root()?;
+        let settings = state.settings.get();
         Workspaces {
             store: &state.store,
             git: &git,
             worktree_root: &root,
+            settings: &settings.workspaces,
         }
         .delete(&id, force)
     })

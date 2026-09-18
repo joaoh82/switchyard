@@ -8,7 +8,7 @@
 //! ```text
 //! spawn(LaunchPlan) -> SessionInfo        list() -> [SessionInfo]
 //! attach(id, sink)  -> AttachmentId       detach(id, attachment)
-//! write(id, bytes)                        resize(id, size)
+//! write(id, bytes) / paste(id, text)       resize(id, size)
 //! kill(id)                                remove(id)
 //! events: HostEvent::Exited
 //! ```
@@ -76,6 +76,11 @@ impl PtyHost {
     /// Send input to the session's process.
     pub fn write(&self, id: &SessionId, data: &[u8]) -> Result<()> {
         self.get(id)?.write(data)
+    }
+
+    /// Paste text into the session, bracketed if the program enabled bracketed paste.
+    pub fn paste(&self, id: &SessionId, text: &str) -> Result<()> {
+        self.get(id)?.paste(text)
     }
 
     pub fn resize(&self, id: &SessionId, size: TermSize) -> Result<()> {

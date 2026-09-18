@@ -4,6 +4,8 @@ export type SidePanel = "left" | "right";
 
 interface LayoutState {
   collapsed: Record<SidePanel, boolean>;
+  settingsOpen: boolean;
+  setSettingsOpen: (open: boolean) => void;
   toggle: (panel: SidePanel) => void;
   setCollapsed: (panel: SidePanel, collapsed: boolean) => void;
 }
@@ -14,6 +16,8 @@ interface LayoutState {
  */
 export const useLayoutStore = create<LayoutState>((set) => ({
   collapsed: { left: false, right: false },
+  settingsOpen: false,
+  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   toggle: (panel) =>
     set((state) => ({ collapsed: { ...state.collapsed, [panel]: !state.collapsed[panel] } })),
   setCollapsed: (panel, collapsed) =>

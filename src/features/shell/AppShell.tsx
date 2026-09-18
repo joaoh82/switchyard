@@ -2,10 +2,13 @@ import { useEffect } from "react";
 import { Group, Panel, Separator, useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import { ChangesPanel } from "@/features/changes/ChangesPanel";
 import { composeInCurrentProject, openProjectFromDisk } from "@/features/sidebar/actions";
+import { SettingsDialog } from "@/features/settings/SettingsDialog";
 import { Sidebar } from "@/features/sidebar/Sidebar";
 import { WorkspacePanel } from "@/features/workspace/WorkspacePanel";
+import { hasCore } from "@/lib/ipc";
 import { isModKey, shortcutKey } from "@/lib/platform";
 import { useAppStore } from "@/stores/app";
+import { useHarnessStore } from "@/stores/harnesses";
 import { useLayoutStore, type SidePanel } from "@/stores/layout";
 import { useProjectsStore } from "@/stores/projects";
 import { useTerminalStore } from "@/stores/terminals";
@@ -21,6 +24,8 @@ export function AppShell() {
   const collapsed = useLayoutStore((s) => s.collapsed);
   const toggle = useLayoutStore((s) => s.toggle);
   const setCollapsed = useLayoutStore((s) => s.setCollapsed);
+  const settingsOpen = useLayoutStore((s) => s.settingsOpen);
+  const setSettingsOpen = useLayoutStore((s) => s.setSettingsOpen);
 
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: "switchyard.shell",
@@ -46,7 +51,10 @@ export function AppShell() {
     if (panel) setCollapsed(side, panel.isCollapsed());
   };
 
-  useEffect(() => void useAppStore.getState().load().catch(console.error), []);
+  useEffect(() => {
+    void useAppStore.getState().load().catch(console.error);
+    if (hasCore()) void useHarnessStore.getState().load();
+  }, []);
 
   // Mod+B / Mod+Alt+B toggle the side panels, Mod+O opens a project, Mod+N composes a new
   // workspace, Mod+T and Mod+W open and
@@ -60,6 +68,7 @@ export function AppShell() {
       const terminals = useTerminalStore.getState();
       if (key === "b") toggle(event.altKey ? "right" : "left");
       else if (event.altKey) return;
+      else if (key === "," || key === "<") setSettingsOpen(true);
       else if (key === "o") void openProjectFromDisk();
       else if (key === "n") composeInCurrentProject();
       else if (key === "t" && workspaceId) void terminals.open(workspaceId);
@@ -71,7 +80,7 @@ export function AppShell() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [toggle]);
+  }, [toggle, setSettingsOpen]);
 
   return (
     <div className="flex h-full flex-col">
@@ -112,6 +121,7 @@ export function AppShell() {
         </Panel>
       </Group>
       <StatusBar />
+      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

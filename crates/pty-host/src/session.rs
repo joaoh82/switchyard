@@ -62,6 +62,7 @@ struct View {
     next_attachment: AttachmentId,
     state: SessionState,
     last_output: Instant,
+    has_output: bool,
 }
 
 impl Session {
@@ -111,6 +112,7 @@ impl Session {
                 next_attachment: 1,
                 state: SessionState::Running,
                 last_output: Instant::now(),
+                has_output: false,
             }),
             plan,
         });
@@ -158,6 +160,7 @@ impl Session {
             size: view.size,
             labels: self.plan.labels.clone(),
             state: view.state.clone(),
+            has_output: view.has_output,
             idle_ms: u32::try_from(view.last_output.elapsed().as_millis()).unwrap_or(u32::MAX),
         }
     }
@@ -188,6 +191,21 @@ impl Session {
         writer.write_all(data)?;
         writer.flush()?;
         Ok(())
+    }
+
+    /// Deliver `text` the way a terminal delivers a paste: wrapped in bracketed-paste markers if
+    /// the program asked for them (so newlines stay part of the text instead of submitting it),
+    /// otherwise as typed input with carriage returns for line breaks.
+    pub(crate) fn paste(&self, text: &str) -> Result<()> {
+        let bracketed = self.view().parser.screen().bracketed_paste();
+        let normalized = text.replace("\r\n", "\n");
+        let payload = if bracketed {
+            // The end marker inside the text would end the paste early; no program needs it.
+            format!("\x1b[200~{}\x1b[201~", normalized.replace("\x1b[201~", ""))
+        } else {
+            normalized.replace('\n', "\r")
+        };
+        self.write(payload.as_bytes())
     }
 
     pub(crate) fn resize(&self, size: TermSize) -> Result<()> {
@@ -312,6 +330,7 @@ impl Session {
         let unattended = view.sinks.is_empty();
         view.parser.process(batch);
         view.last_output = Instant::now();
+        view.has_output = true;
         view.sinks.retain_mut(|(_, sink)| sink(batch));
 
         let mut replies = Vec::new();

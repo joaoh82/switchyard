@@ -365,6 +365,33 @@ fn an_attached_viewer_answers_cursor_queries_itself() {
 
 #[cfg(unix)]
 #[test]
+fn paste_is_bracketed_only_for_programs_that_asked() {
+    let (host, events) = host();
+    // `cat -v` shows control characters; the first run enables bracketed paste, the second not.
+    for (setup, bracketed) in [("printf '\\033[?2004h'; ", true), ("", false)] {
+        let session = host
+            .spawn(shell(&format!(
+                "{setup}stty -echo; echo ready; head -c 40 | cat -v; echo; echo done"
+            )))
+            .unwrap();
+        let capture = Capture::default();
+        attach_terminal(&host, &session.id, &capture);
+        capture.wait_for("ready");
+        assert!(host.info(&session.id).unwrap().has_output);
+
+        host.paste(&session.id, "two\nlines").unwrap();
+        host.write(&session.id, &[b'\n'; 40]).unwrap(); // let `head` finish
+        capture.wait_for("done");
+        let text = capture.text();
+        assert!(text.contains("two") && text.contains("lines"), "{text:?}");
+        assert_eq!(text.contains("^[[200~two"), bracketed, "{text:?}");
+        assert_eq!(text.contains("lines^[[201~"), bracketed, "{text:?}");
+        wait_for_exit(&host, &events, &session.id);
+    }
+}
+
+#[cfg(unix)]
+#[test]
 fn the_plan_controls_the_environment() {
     let (host, events) = host();
     let mut plan = shell("echo \"[$SY_TEST|$TERM|${HOME:-unset}]\"");

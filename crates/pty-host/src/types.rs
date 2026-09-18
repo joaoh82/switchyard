@@ -109,6 +109,9 @@ pub struct SessionInfo {
     pub size: TermSize,
     pub labels: BTreeMap<String, String>,
     pub state: SessionState,
+    /// Whether the program has printed anything yet. With `idle_ms` this tells "still starting"
+    /// from "started and now waiting", without anyone parsing what it printed.
+    pub has_output: bool,
     /// Milliseconds since the session last produced output (saturating). Drives "busy / waiting" indicators
     /// without anyone having to parse what the program printed.
     pub idle_ms: u32,

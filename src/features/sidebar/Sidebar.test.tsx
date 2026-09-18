@@ -40,6 +40,7 @@ const shellIn = (workspace: string) => ({
   size: { cols: 80, rows: 24 },
   labels: { workspace },
   state: { status: "running" as const },
+  hasOutput: true,
   idleMs: 0,
 });
 

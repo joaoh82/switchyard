@@ -25,6 +25,7 @@ function session(id: string, program: string, workspace: string | null = "ws", e
     state: exited
       ? { status: "exited", exit: { code: 0, success: true, signal: null } }
       : { status: "running" },
+    hasOutput: true,
     idleMs: 0,
   } satisfies SessionInfo;
 }

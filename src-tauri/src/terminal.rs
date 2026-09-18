@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use pty_host::{AttachmentId, HostError, HostEvent, LaunchPlan, SessionId, SessionInfo, TermSize};
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,7 @@ use tauri::{AppHandle, State};
 
 use crate::env::{EnvSource, ShellEnv};
 use crate::error::{IpcError, IpcResult};
-use crate::harness::{self, LaunchValues, SessionIdMode};
+use crate::harness::{self, HarnessOverride, LaunchValues, PromptTransport, SessionIdMode};
 use crate::state::{blocking, AppState};
 
 /// Emitted for every [`HostEvent`].
@@ -121,10 +122,8 @@ pub async fn pty_spawn(app: AppHandle, request: SpawnRequest) -> IpcResult<Sessi
         match request.workspace_id {
             Some(workspace_id) => spawn_in_workspace(state, &workspace_id, launch, request.size),
             None => {
-                let (program, args, labels) = resolve_launch(launch)?;
-                let mut plan = launch_plan(&state.env(), program, args, request.cwd, request.size)?;
-                plan.labels = labels;
-                Ok(state.host.spawn(plan)?)
+                let resolved = resolve_launch(launch, &state.settings.get().harnesses)?;
+                start(state, resolved, request.cwd, request.size)
             }
         }
     })
@@ -148,40 +147,160 @@ pub fn spawn_in_workspace(
             format!("{} does not exist any more.", workspace.path),
         ));
     }
-    let (program, args, mut labels) = resolve_launch(launch)?;
-    labels.insert(WORKSPACE_LABEL.to_owned(), workspace_id.to_owned());
-    let mut plan = launch_plan(&state.env(), program, args, Some(workspace.path), size)?;
-    plan.labels = labels;
-    Ok(state.host.spawn(plan)?)
+    let mut resolved = resolve_launch(launch, &state.settings.get().harnesses)?;
+    resolved
+        .labels
+        .insert(WORKSPACE_LABEL.to_owned(), workspace_id.to_owned());
+    start(state, resolved, Some(workspace.path), size)
+}
+
+/// Spawn a resolved launch and, if its prompt travels over stdin, arrange for the delivery.
+pub fn start(
+    state: &AppState,
+    resolved: ResolvedLaunch,
+    cwd: Option<String>,
+    size: TermSize,
+) -> IpcResult<SessionInfo> {
+    let mut plan = launch_plan(&state.env(), resolved.program, resolved.args, cwd, size)?;
+    plan.labels = resolved.labels;
+    let session = state.host.spawn(plan)?;
+    if let Some(prompt) = resolved.paste_when_ready {
+        deliver_prompt(Arc::clone(&state.host), session.id.clone(), prompt);
+    }
+    Ok(session)
 }
 
 type Labels = std::collections::BTreeMap<String, String>;
 
+/// A [`Launch`] made concrete.
+pub struct ResolvedLaunch {
+    /// `None` runs the user's shell.
+    pub program: Option<String>,
+    pub args: Vec<String>,
+    pub labels: Labels,
+    /// A prompt to paste once the program is up, instead of passing it as an argument.
+    pub paste_when_ready: Option<PendingPrompt>,
+}
+
+pub struct PendingPrompt {
+    pub text: String,
+    pub quiet_ms: u32,
+}
+
+/// The longest prompt we will put on a command line. Beyond this the OS may refuse to start the
+/// process at all (Windows caps a whole command line near 32 K characters; Linux caps a single
+/// argument at 128 KiB), so such prompts are pasted instead.
+const MAX_ARGV_PROMPT: usize = if cfg!(windows) { 24_000 } else { 100_000 };
+
 /// Turn a [`Launch`] into a program, its argv and the labels describing it.
-fn resolve_launch(launch: Launch) -> IpcResult<(Option<String>, Vec<String>, Labels)> {
+pub fn resolve_launch(launch: Launch, overrides: &[HarnessOverride]) -> IpcResult<ResolvedLaunch> {
     let mut labels = Labels::new();
     Ok(match launch {
-        Launch::Shell => (None, vec![], labels),
-        Launch::Program { program, args } => (Some(program), args, labels),
+        Launch::Shell => ResolvedLaunch {
+            program: None,
+            args: vec![],
+            labels,
+            paste_when_ready: None,
+        },
+        Launch::Program { program, args } => ResolvedLaunch {
+            program: Some(program),
+            args,
+            labels,
+            paste_when_ready: None,
+        },
         Launch::Harness(request) => {
-            let def = harness::find(&request.id).ok_or_else(|| {
+            let mut def = harness::find(&request.id, overrides).ok_or_else(|| {
                 IpcError::new("unknown_harness", "That harness is not configured.")
             })?;
+            let prompt = request.prompt.filter(|p| !p.trim().is_empty());
+            if prompt.as_ref().is_some_and(|p| p.len() > MAX_ARGV_PROMPT) {
+                def.prompt_transport = PromptTransport::Stdin;
+            }
             let session_id = (def.session_id_mode == SessionIdMode::Assigned)
                 .then(|| uuid::Uuid::new_v4().to_string());
             let args = def.start_args(&LaunchValues {
-                prompt: request.prompt,
+                prompt: prompt.clone(),
                 model: request.model,
                 effort: request.effort,
                 session_id: session_id.clone(),
             });
-            labels.insert(HARNESS_LABEL.to_owned(), def.id);
+            labels.insert(HARNESS_LABEL.to_owned(), def.id.clone());
             if let Some(session_id) = session_id {
                 labels.insert(HARNESS_SESSION_LABEL.to_owned(), session_id);
             }
-            (Some(def.command), args, labels)
+            ResolvedLaunch {
+                program: Some(def.command.clone()),
+                args,
+                labels,
+                paste_when_ready: prompt
+                    .filter(|_| def.prompt_transport == PromptTransport::Stdin)
+                    .map(|text| PendingPrompt {
+                        text,
+                        quiet_ms: def.stdin_ready_ms,
+                    }),
+            }
         }
     })
+}
+
+/// How long to wait for a harness to become ready before pasting anyway.
+const READY_TIMEOUT: Duration = Duration::from_secs(20);
+const READY_POLL: Duration = Duration::from_millis(100);
+/// Pause between pasting and pressing Enter; some TUIs drop an Enter that arrives with the paste.
+const SUBMIT_DELAY: Duration = Duration::from_millis(150);
+
+#[derive(Debug, PartialEq, Eq)]
+enum Readiness {
+    Ready,
+    /// Still running at the timeout; we paste anyway rather than lose the prompt.
+    TimedOut,
+    Gone,
+}
+
+/// Wait until the program has printed something and then stayed quiet for `quiet` — a TUI that
+/// has finished drawing itself and is waiting for input. We never parse what it printed.
+/// `observe` reports `(has_output, idle)` or `None` once the session is over.
+fn wait_until_ready(
+    quiet: Duration,
+    timeout: Duration,
+    poll: Duration,
+    mut observe: impl FnMut() -> Option<(bool, Duration)>,
+) -> Readiness {
+    let started = Instant::now();
+    loop {
+        match observe() {
+            None => return Readiness::Gone,
+            Some((true, idle)) if idle >= quiet => return Readiness::Ready,
+            Some(_) if started.elapsed() >= timeout => return Readiness::TimedOut,
+            Some(_) => std::thread::sleep(poll),
+        }
+    }
+}
+
+/// Paste `prompt` into a session once it is ready, then submit it. Runs on its own thread.
+fn deliver_prompt(host: Arc<pty_host::PtyHost>, id: SessionId, prompt: PendingPrompt) {
+    let spawned = std::thread::Builder::new()
+        .name("prompt-delivery".into())
+        .spawn(move || {
+            let quiet = Duration::from_millis(u64::from(prompt.quiet_ms));
+            let readiness = wait_until_ready(quiet, READY_TIMEOUT, READY_POLL, || {
+                let info = host.info(&id).ok()?;
+                matches!(info.state, pty_host::SessionState::Running).then(|| {
+                    (
+                        info.has_output,
+                        Duration::from_millis(u64::from(info.idle_ms)),
+                    )
+                })
+            });
+            if readiness == Readiness::Gone || host.paste(&id, &prompt.text).is_err() {
+                return;
+            }
+            std::thread::sleep(SUBMIT_DELAY);
+            let _ = host.write(&id, b"\r");
+        });
+    if let Err(error) = spawned {
+        eprintln!("could not start prompt delivery: {error}");
+    }
 }
 
 /// Stream a session into `output`: first a snapshot that repaints the terminal, then live bytes.
@@ -382,23 +501,143 @@ mod tests {
             effort: None,
             prompt: Some("fix it".into()),
         };
-        let (program, args, labels) = resolve_launch(Launch::Harness(request("claude"))).unwrap();
-        assert_eq!(program.as_deref(), Some("claude"));
-        let session = &labels[HARNESS_SESSION_LABEL];
-        assert_eq!(args, ["--model", "opus", "--session-id", session, "fix it"]);
-        assert_eq!(labels[HARNESS_LABEL], "claude");
-
-        let (_, args, labels) = resolve_launch(Launch::Harness(request("codex"))).unwrap();
-        assert_eq!(args, ["-m", "opus", "fix it"]);
+        let claude = resolve_launch(Launch::Harness(request("claude")), &[]).unwrap();
+        assert_eq!(claude.program.as_deref(), Some("claude"));
+        let session = &claude.labels[HARNESS_SESSION_LABEL];
+        assert_eq!(
+            claude.args,
+            ["--model", "opus", "--session-id", session, "fix it"]
+        );
+        assert_eq!(claude.labels[HARNESS_LABEL], "claude");
         assert!(
-            !labels.contains_key(HARNESS_SESSION_LABEL),
+            claude.paste_when_ready.is_none(),
+            "argv harnesses take the prompt as an argument"
+        );
+
+        let codex = resolve_launch(Launch::Harness(request("codex")), &[]).unwrap();
+        assert_eq!(codex.args, ["-m", "opus", "fix it"]);
+        assert!(
+            !codex.labels.contains_key(HARNESS_SESSION_LABEL),
             "codex picks its own id"
         );
 
-        let err = resolve_launch(Launch::Harness(request("nope")))
+        let err = resolve_launch(Launch::Harness(request("nope")), &[])
             .err()
             .unwrap();
         assert_eq!(err.code, "unknown_harness");
+    }
+
+    #[test]
+    fn stdin_harnesses_and_oversized_prompts_are_pasted_not_passed() {
+        let request = |prompt: String| HarnessRequest {
+            id: "claude".into(),
+            model: None,
+            effort: None,
+            prompt: Some(prompt),
+        };
+        let stdin = [HarnessOverride {
+            id: "claude".into(),
+            prompt_transport: Some(PromptTransport::Stdin),
+            stdin_ready_ms: Some(700),
+            ..Default::default()
+        }];
+        let pasted = resolve_launch(Launch::Harness(request("hello".into())), &stdin).unwrap();
+        assert!(!pasted.args.contains(&"hello".to_owned()));
+        let pending = pasted.paste_when_ready.unwrap();
+        assert_eq!((pending.text.as_str(), pending.quiet_ms), ("hello", 700));
+
+        let huge = "x".repeat(MAX_ARGV_PROMPT + 1);
+        let fallback = resolve_launch(Launch::Harness(request(huge.clone())), &[]).unwrap();
+        assert!(
+            fallback.args.iter().all(|arg| arg.len() < 100),
+            "kept off the command line"
+        );
+        assert_eq!(fallback.paste_when_ready.unwrap().text, huge);
+
+        let blank = resolve_launch(Launch::Harness(request("   ".into())), &stdin).unwrap();
+        assert!(
+            blank.paste_when_ready.is_none(),
+            "nothing to say means nothing to paste"
+        );
+    }
+
+    /// The whole path, against a real program in a real PTY: a "harness" that draws a prompt,
+    /// then reads a line. The message must arrive only after it has gone quiet, and be submitted.
+    #[cfg(unix)]
+    #[test]
+    fn a_pasted_prompt_reaches_the_program_and_is_submitted() {
+        use std::sync::Mutex;
+        let host = Arc::new(pty_host::PtyHost::new(Arc::new(|_| {})));
+        let session = host
+            .spawn(LaunchPlan {
+                program: "/bin/sh".into(),
+                args: vec![
+                    "-c".into(),
+                    "printf 'starting'; sleep 0.3; printf ' > '; read line; echo \"got:[$line]\""
+                        .into(),
+                ],
+                cwd: None,
+                env: vec![],
+                clear_env: false,
+                size: SIZE,
+                labels: Default::default(),
+            })
+            .unwrap();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&seen);
+        host.attach(
+            &session.id,
+            Box::new(move |bytes| {
+                sink.lock().unwrap().extend_from_slice(bytes);
+                true
+            }),
+        )
+        .unwrap();
+
+        let prompt = PendingPrompt {
+            text: "fix the bug".into(),
+            quiet_ms: 600,
+        };
+        deliver_prompt(Arc::clone(&host), session.id.clone(), prompt);
+
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            let text = String::from_utf8_lossy(&seen.lock().unwrap()).into_owned();
+            if text.contains("got:[fix the bug]") {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the prompt never arrived: {text:?}"
+            );
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    }
+
+    #[test]
+    fn readiness_is_output_followed_by_quiet() {
+        let ms = Duration::from_millis;
+        let run = |script: Vec<Option<(bool, u64)>>, timeout: u64| {
+            let mut steps = script.into_iter();
+            let mut last = None;
+            wait_until_ready(ms(500), ms(timeout), ms(1), move || {
+                last = steps.next().or(last);
+                last.flatten().map(|(out, idle)| (out, ms(idle)))
+            })
+        };
+        // Silent at first, then drawing (idle resets), then quiet long enough.
+        let drawing = vec![
+            Some((false, 900)),
+            Some((true, 10)),
+            Some((true, 200)),
+            Some((true, 600)),
+        ];
+        assert_eq!(run(drawing, 5_000), Readiness::Ready);
+        // Quiet from the start does not count: nothing was ever printed.
+        assert_eq!(run(vec![Some((false, 10_000))], 30), Readiness::TimedOut);
+        // Never settles: give up waiting rather than lose the prompt.
+        assert_eq!(run(vec![Some((true, 5))], 30), Readiness::TimedOut);
+        assert_eq!(run(vec![Some((true, 5)), None], 5_000), Readiness::Gone);
     }
 
     #[cfg(not(windows))]

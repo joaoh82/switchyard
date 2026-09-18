@@ -12,7 +12,9 @@ import {
   type CreatedWorkspace,
   type EnvInfo,
   type ExitInfo,
+  type HarnessDef,
   type HarnessInfo,
+  type HarnessPreview,
   type HarnessRequest,
   type HostEvent,
   type IpcError,
@@ -20,9 +22,11 @@ import {
   type Project,
   type SessionId,
   type SessionInfo,
+  type SettingsInfo,
   type SpawnRequest,
   type TermSize,
   type Workspace,
+  type WorkspaceSettingsDto,
 } from "./bindings";
 
 export type {
@@ -32,7 +36,9 @@ export type {
   CreatedWorkspace,
   EnvInfo,
   ExitInfo,
+  HarnessDef,
   HarnessInfo,
+  HarnessPreview,
   HarnessRequest,
   HostEvent,
   IpcError,
@@ -40,9 +46,11 @@ export type {
   Project,
   SessionId,
   SessionInfo,
+  SettingsInfo,
   SpawnRequest,
   TermSize,
   Workspace,
+  WorkspaceSettingsDto,
 };
 
 /** Session labels: the workspace a session belongs to, and the harness it runs (if any). */
@@ -96,6 +104,16 @@ export const ipc = {
   uiStateSave: (key: string, value: string) => done(commands.uiStateSave(key, value)),
 
   harnessesList: () => unwrap(commands.harnessesList()),
+  /** Save a definition; built-ins keep only their differences. Resolves to the new list. */
+  harnessSave: (def: HarnessDef) => unwrap(commands.harnessSave(def)),
+  /** Restore a built-in, or delete a custom harness. Resolves to the new list. */
+  harnessReset: (id: string) => unwrap(commands.harnessReset(id)),
+  harnessPreview: (def: HarnessDef) => unwrap(commands.harnessPreview(def)),
+  /** Start a (possibly unsaved) definition with no prompt, to see whether it comes up. */
+  harnessTest: (def: HarnessDef, size: TermSize) => unwrap(commands.harnessTest(def, size)),
+  settingsGet: () => unwrap(commands.settingsGet()),
+  settingsSaveWorkspaces: (workspaces: WorkspaceSettingsDto) =>
+    unwrap(commands.settingsSaveWorkspaces(workspaces)),
   projectBranches: (projectId: string) => unwrap(commands.projectBranches(projectId)),
   /** Worktree + branch + harness in one step; leaves nothing behind if any part fails. */
   workspaceCreate: (request: NewWorkspace) => unwrap(commands.workspaceCreate(request)),

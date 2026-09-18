@@ -10,16 +10,16 @@ use std::path::{Path, PathBuf};
 
 use crate::error::{IpcError, IpcResult};
 use crate::git::{normalize, Git, GitError};
+use crate::settings::WorkspaceSettings;
 use crate::store::{ProjectRow, Store, WorkspaceRow};
-
-/// Prefix of the branches Switchyard creates: `sy/fix-login-bug`.
-pub const BRANCH_PREFIX: &str = "sy";
 
 pub struct Workspaces<'a> {
     pub store: &'a Store,
     pub git: &'a Git,
     /// Worktrees live in `<root>/<project>/<workspace>`, outside the repositories themselves.
     pub worktree_root: &'a Path,
+    /// Branch prefix and friends.
+    pub settings: &'a WorkspaceSettings,
 }
 
 impl Workspaces<'_> {
@@ -51,7 +51,7 @@ impl Workspaces<'_> {
         let name = naming::unique(&naming::base_name(prompt, seed), |candidate| {
             let branch_taken = self
                 .git
-                .branch_exists(&root, &branch_for(candidate))
+                .branch_exists(&root, &self.settings.branch_for(candidate))
                 .unwrap_or_else(|e| {
                     probe_error = Some(e);
                     false
@@ -62,7 +62,7 @@ impl Workspaces<'_> {
             return Err(error.into());
         }
 
-        let branch = branch_for(&name);
+        let branch = self.settings.branch_for(&name);
         let path = project_dir.join(&name);
         self.ensure_dir(&project_dir)?;
         self.git.worktree_add(&root, &path, &branch, &base)?;
@@ -82,9 +82,7 @@ impl Workspaces<'_> {
         }
         let project_dir = self.project_dir(&project);
         // `sy/fix-login` comes back as `fix-login`; other branches are named after themselves.
-        let own = branch
-            .strip_prefix(&format!("{BRANCH_PREFIX}/"))
-            .unwrap_or(branch);
+        let own = self.settings.name_from_branch(branch);
         let base = naming::slugify_name(own).unwrap_or_else(|| naming::base_name("", 0));
         let name = naming::unique(&base, |candidate| project_dir.join(candidate).exists());
 
@@ -259,10 +257,6 @@ pub fn adopt_unknown(store: &Store, git: &Git, project_id: &str) -> IpcResult<us
     Ok(adopted)
 }
 
-fn branch_for(name: &str) -> String {
-    format!("{BRANCH_PREFIX}/{name}")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,6 +271,7 @@ mod tests {
         repo: PathBuf,
         worktrees: PathBuf,
         project_id: String,
+        settings: WorkspaceSettings,
     }
 
     impl Fixture {
@@ -293,6 +288,7 @@ mod tests {
                 repo: PathBuf::from(&added.project.root_path),
                 worktrees: normalize(worktrees.path()),
                 project_id: added.project.id,
+                settings: WorkspaceSettings::default(),
                 _dirs: (code, worktrees),
                 store,
                 git,
@@ -304,6 +300,7 @@ mod tests {
                 store: &self.store,
                 git: &self.git,
                 worktree_root: &self.worktrees,
+                settings: &self.settings,
             }
         }
 
@@ -358,6 +355,33 @@ mod tests {
             .create(&fx.project_id, None, "Add tests!")
             .unwrap();
         assert_eq!(ws.name, "add-tests-3");
+    }
+
+    #[test]
+    fn the_branch_prefix_is_a_setting_and_may_be_empty() {
+        let mut fx = Fixture::new();
+        fx.settings.branch_prefix = "joao/wip".into();
+        let ws = fx
+            .workspaces()
+            .create(&fx.project_id, None, "tidy up")
+            .unwrap();
+        assert_eq!(ws.branch.as_deref(), Some("joao/wip/tidy-up"));
+        assert_eq!(ws.name, "tidy-up");
+        fx.workspaces().delete(&ws.id, false).unwrap();
+        assert_eq!(
+            fx.workspaces()
+                .open_branch(&fx.project_id, "joao/wip/tidy-up")
+                .unwrap()
+                .name,
+            "tidy-up"
+        );
+
+        fx.settings.branch_prefix = String::new();
+        let bare = fx
+            .workspaces()
+            .create(&fx.project_id, None, "no prefix")
+            .unwrap();
+        assert_eq!(bare.branch.as_deref(), Some("no-prefix"));
     }
 
     #[test]
