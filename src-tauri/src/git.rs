@@ -64,6 +64,12 @@ impl Git {
     }
 
     pub(crate) fn run(&self, cwd: &Path, args: &[&str]) -> GitResult<String> {
+        let bytes = self.run_bytes(cwd, args)?;
+        Ok(String::from_utf8_lossy(&bytes).trim_end().to_owned())
+    }
+
+    /// Like [`Self::run`], with stdout exactly as git wrote it: file contents, `-z` lists.
+    pub(crate) fn run_bytes(&self, cwd: &Path, args: &[&str]) -> GitResult<Vec<u8>> {
         let mut command = Command::new(&self.program);
         command
             .args(args)
@@ -83,9 +89,7 @@ impl Git {
 
         let output = command.output()?;
         if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout)
-                .trim_end()
-                .to_owned())
+            Ok(output.stdout)
         } else {
             Err(GitError::Failed {
                 command: args.join(" "),

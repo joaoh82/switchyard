@@ -15,10 +15,27 @@ pub const DEFAULT_BRANCH_PREFIX: &str = "sy";
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    #[serde(skip_serializing_if = "GeneralSettings::is_default")]
+    pub general: GeneralSettings,
     pub workspaces: WorkspaceSettings,
     /// Overrides of built-in harnesses, and whole custom ones. See [`HarnessOverride`].
     #[serde(rename = "harness", skip_serializing_if = "Vec::is_empty")]
     pub harnesses: Vec<HarnessOverride>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GeneralSettings {
+    /// The command "Open in editor" runs, e.g. `code` or `zed --new`. It is given the workspace
+    /// folder and then the file. `None` tries the common editors in turn.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub editor_command: Option<String>,
+}
+
+impl GeneralSettings {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

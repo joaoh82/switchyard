@@ -11,6 +11,7 @@ const core = vi.hoisted(() => ({
   harnessTest: vi.fn(),
   settingsGet: vi.fn(),
   settingsSaveWorkspaces: vi.fn(),
+  settingsSaveGeneral: vi.fn(),
   ptyClose: vi.fn(),
 }));
 const native = vi.hoisted(() => ({ pickFolder: vi.fn() }));
@@ -59,6 +60,7 @@ const codex: HarnessInfo = {
 };
 
 const settings: SettingsInfo = {
+  editorCommand: null,
   workspaces: { worktreeRoot: null, branchPrefix: "sy" },
   defaultWorktreeRoot: "/home/me/switchyard",
   worktreeRootOverride: null,
@@ -317,6 +319,25 @@ describe("Settings", () => {
         screen.getByText(/Overridden by SWITCHYARD_WORKTREE_ROOT.*\/tmp\/sy-wt/),
       ).toBeInTheDocument();
     });
+  });
+
+  it("saves the editor command, and clearing it goes back to auto-detect", async () => {
+    core.settingsSaveGeneral.mockImplementation(async (editorCommand) => ({
+      ...settings,
+      editorCommand,
+    }));
+    const { user } = await openSettings();
+    await user.click(screen.getByRole("tab", { name: "General" }));
+    const editor = await screen.findByLabelText("Editor command");
+    expect(editor).toHaveAttribute("placeholder", "auto-detect");
+
+    await user.type(editor, " zed ");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(core.settingsSaveGeneral).toHaveBeenLastCalledWith("zed");
+
+    await user.clear(editor);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(core.settingsSaveGeneral).toHaveBeenLastCalledWith(null);
   });
 
   it("closes on Escape and on Done", async () => {

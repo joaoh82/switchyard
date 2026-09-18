@@ -17,6 +17,8 @@ pub struct AppState {
     pub settings: SettingsFile,
     /// Held while catching up with git, so overlapping project listings reconcile one at a time.
     pub reconciling: Mutex<()>,
+    /// The file watcher of the workspace on screen, if any.
+    pub watcher: Mutex<Option<crate::changes::watch::WorkspaceWatcher>>,
     env: Mutex<Option<Arc<ShellEnv>>>,
 }
 
@@ -27,6 +29,7 @@ impl AppState {
             store,
             settings,
             reconciling: Mutex::new(()),
+            watcher: Mutex::new(None),
             env: Mutex::new(None),
         }
     }

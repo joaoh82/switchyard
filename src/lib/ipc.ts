@@ -9,9 +9,14 @@ import {
   type AddedProject,
   type AppInfo,
   type BranchList,
+  type ChangeSet,
+  type Content,
   type CreatedWorkspace,
   type EnvInfo,
   type ExitInfo,
+  type FileChange,
+  type FileDiff,
+  type FileEntry,
   type HarnessDef,
   type HarnessInfo,
   type HarnessPreview,
@@ -20,6 +25,7 @@ import {
   type IpcError,
   type NewWorkspace,
   type Project,
+  type Scope,
   type SessionId,
   type SessionInfo,
   type SettingsInfo,
@@ -33,9 +39,14 @@ export type {
   AddedProject,
   AppInfo,
   BranchList,
+  ChangeSet,
+  Content,
   CreatedWorkspace,
   EnvInfo,
   ExitInfo,
+  FileChange,
+  FileDiff,
+  FileEntry,
   HarnessDef,
   HarnessInfo,
   HarnessPreview,
@@ -44,6 +55,7 @@ export type {
   IpcError,
   NewWorkspace,
   Project,
+  Scope,
   SessionId,
   SessionInfo,
   SettingsInfo,
@@ -119,6 +131,29 @@ export const ipc = {
   workspaceCreate: (request: NewWorkspace) => unwrap(commands.workspaceCreate(request)),
   /** Rejects with code `worktree_dirty` unless `force` is set. The branch is always kept. */
   workspaceDelete: (id: string, force = false) => done(commands.workspaceDelete(id, force)),
+
+  settingsSaveGeneral: (editorCommand: string | null) =>
+    unwrap(commands.settingsSaveGeneral(editorCommand)),
+
+  workspaceChanges: (workspaceId: string) => unwrap(commands.workspaceChanges(workspaceId)),
+  /** Both versions of a file; the viewer computes the diff. */
+  workspaceDiff: (
+    workspaceId: string,
+    change: Pick<FileChange, "path" | "oldPath">,
+    scope: Scope,
+  ) => unwrap(commands.workspaceDiff(workspaceId, change.path, change.oldPath, scope)),
+  /** One folder of the file tree; `dir` is relative, empty for the root. */
+  workspaceFiles: (workspaceId: string, dir: string) =>
+    unwrap(commands.workspaceFiles(workspaceId, dir)),
+  workspaceFile: (workspaceId: string, path: string) =>
+    unwrap(commands.workspaceFile(workspaceId, path)),
+  /** Watch one workspace's files (replacing any earlier watch); `null` stops. */
+  workspaceWatch: (workspaceId: string | null) => done(commands.workspaceWatch(workspaceId)),
+  onWorkspaceFilesChanged: (handler: (workspaceId: string) => void) =>
+    events.workspaceFilesChanged.listen((event) => handler(event.payload.workspaceId)),
+  /** Open a file — or the workspace folder, for `null` — in the user's editor. */
+  openInEditor: (workspaceId: string, path: string | null) =>
+    done(commands.openInEditor(workspaceId, path)),
 
   ptySpawn: (request: SpawnRequest) => unwrap(commands.ptySpawn(request)),
   ptyList: () => unwrap(commands.ptyList()),

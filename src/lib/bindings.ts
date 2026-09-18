@@ -36,6 +36,7 @@ export const commands = {
 	harnessTest: (def: HarnessDef, size: TermSize) => typedError<SessionInfo, IpcError>(__TAURI_INVOKE("harness_test", { def, size })),
 	settingsGet: () => typedError<SettingsInfo, IpcError>(__TAURI_INVOKE("settings_get")),
 	settingsSaveWorkspaces: (workspaces: WorkspaceSettingsDto) => typedError<SettingsInfo, IpcError>(__TAURI_INVOKE("settings_save_workspaces", { workspaces })),
+	settingsSaveGeneral: (editorCommand: string | null) => typedError<SettingsInfo, IpcError>(__TAURI_INVOKE("settings_save_general", { editorCommand })),
 	projectBranches: (projectId: string) => typedError<BranchList, IpcError>(__TAURI_INVOKE("project_branches", { projectId })),
 	/**
 	 *  The core loop: make a worktree — on a new branch, or for an existing one — and start a harness in it with the user's
@@ -45,6 +46,15 @@ export const commands = {
 	workspaceCreate: (request: NewWorkspace) => typedError<CreatedWorkspace, IpcError>(__TAURI_INVOKE("workspace_create", { request })),
 	/**  Remove a workspace's worktree. The branch is kept. Fails with `worktree_dirty` unless `force`. */
 	workspaceDelete: (id: string, force: boolean) => typedError<null, IpcError>(__TAURI_INVOKE("workspace_delete", { id, force })),
+	workspaceChanges: (workspaceId: string) => typedError<ChangeSet, IpcError>(__TAURI_INVOKE("workspace_changes", { workspaceId })),
+	workspaceDiff: (workspaceId: string, path: string, oldPath: string | null, scope: Scope) => typedError<FileDiff, IpcError>(__TAURI_INVOKE("workspace_diff", { workspaceId, path, oldPath, scope })),
+	/**  One folder of the workspace's file tree (`dir` is relative; empty for the root). */
+	workspaceFiles: (workspaceId: string, dir: string) => typedError<FileEntry[], IpcError>(__TAURI_INVOKE("workspace_files", { workspaceId, dir })),
+	workspaceFile: (workspaceId: string, path: string) => typedError<Content, IpcError>(__TAURI_INVOKE("workspace_file", { workspaceId, path })),
+	/**  Watch this workspace's files (replacing any previous watch); `None` stops watching. */
+	workspaceWatch: (workspaceId: string | null) => typedError<null, IpcError>(__TAURI_INVOKE("workspace_watch", { workspaceId })),
+	/**  Open a file (or the workspace folder, when `path` is `None`) in the user's editor. */
+	openInEditor: (workspaceId: string, path: string | null) => typedError<null, IpcError>(__TAURI_INVOKE("open_in_editor", { workspaceId, path })),
 	envInfo: (reload: boolean) => typedError<EnvInfo, IpcError>(__TAURI_INVOKE("env_info", { reload })),
 	ptySpawn: (request: SpawnRequest) => typedError<SessionInfo, IpcError>(__TAURI_INVOKE("pty_spawn", { request })),
 	/**  Stream a session into `output`: first a snapshot that repaints the terminal, then live bytes. */
@@ -61,6 +71,7 @@ export const commands = {
 /** Events */
 export const events = {
 	ptyHostEvent: makeEvent<PtyHostEvent>("pty-host-event"),
+	workspaceFilesChanged: makeEvent<WorkspaceFilesChanged>("workspace-files-changed"),
 };
 
 /* Types */
@@ -93,6 +104,24 @@ export type BranchList = {
 	 */
 	checkedOut: string[],
 };
+
+export type ChangeKind = "added" | "modified" | "deleted" | "renamed" | 
+/**  New and not yet known to git. */
+"untracked" | "conflicted";
+
+export type ChangeSet = {
+	uncommitted: FileChange[],
+	committed: FileChange[],
+	/**
+	 *  The branch `committed` is measured against; `None` when there is nothing to compare with
+	 *  (the workspace *is* the base branch, or HEAD is detached).
+	 */
+	base: string | null,
+};
+
+export type Content = 
+/**  The file does not exist on this side (added, or deleted). */
+{ type: "absent" } | { type: "text"; text: string } | { type: "binary" } | { type: "tooLarge"; bytes: number };
 
 export type CreatedWorkspace = {
 	workspace: Workspace,
@@ -132,6 +161,29 @@ export type ExitInfo = {
 	success: boolean,
 	/**  Name of the terminating signal, where the platform reports one. */
 	signal: string | null,
+};
+
+export type FileChange = {
+	/**  Path relative to the workspace root, with `/` separators. */
+	path: string,
+	/**  Where a renamed file used to live. */
+	oldPath: string | null,
+	kind: ChangeKind,
+	/**  Lines added / removed. `None` for binary and untracked files. */
+	additions: number | null,
+	deletions: number | null,
+};
+
+export type FileDiff = {
+	old: Content,
+	new: Content,
+};
+
+export type FileEntry = {
+	name: string,
+	/**  Relative to the workspace root, with `/` separators. */
+	path: string,
+	isDir: boolean,
 };
 
 export type HarnessDef = {
@@ -257,6 +309,8 @@ export type PtyHostEvent = HostEvent;
  */
 export type RawBytes = number[];
 
+export type Scope = "uncommitted" | "committed";
+
 /**  Opaque, globally unique session identifier. */
 export type SessionId = string;
 
@@ -293,6 +347,8 @@ export type SessionInfo = {
 export type SessionState = { status: "running" } | { status: "exited"; exit: ExitInfo };
 
 export type SettingsInfo = {
+	/**  The "Open in editor" command; `None` tries the common editors in turn. */
+	editorCommand: string | null,
 	workspaces: WorkspaceSettingsDto,
 	defaultWorktreeRoot: string,
 	/**  Set while `SWITCHYARD_WORKTREE_ROOT` overrides the setting. */
@@ -333,6 +389,11 @@ export type Workspace = {
 	head: HeadInfo | null,
 	/**  The folder is gone. Only deleting the workspace makes sense then. */
 	missing: boolean,
+};
+
+/**  Something changed on disk in the watched workspace; ask again. */
+export type WorkspaceFilesChanged = {
+	workspaceId: string,
 };
 
 export type WorkspaceKind = 

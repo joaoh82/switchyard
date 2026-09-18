@@ -32,8 +32,8 @@ settled.
 8. ~~**Worktree root default.**~~ **Settled in M3:** visible and short —
    `~/switchyard/<project>/<workspace>`; `SWITCHYARD_WORKTREE_ROOT` overrides it, and M4 makes it
    a setting.
-9. **Diff viewer.** CodeMirror 6 merge view (light, flexible) vs Monaco (heavier, familiar) vs a
-   dedicated React diff component. Lean: CodeMirror; decide with a spike in M5.
+9. ~~**Diff viewer.**~~ **Settled in M5:** CodeMirror 6 with its unified merge view — light, themable
+   from our CSS variables, and one component serves both the diff and the read-only file viewer.
 10. ~~**Frontend framework.**~~ **Settled 2026-09-17: React** (+ TypeScript, Vite, Tailwind,
     Zustand), for the component ecosystem.
 11. **`stdin` transport readiness detection.** Quiet-period heuristic vs per-harness ready regex vs

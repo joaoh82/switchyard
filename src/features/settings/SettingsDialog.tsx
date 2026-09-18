@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { buttonClass } from "./fields";
+import { GeneralSettings } from "./GeneralSettings";
 import { HarnessSettings } from "./HarnessSettings";
 import { WorkspaceSettings } from "./WorkspaceSettings";
 
 const SECTIONS = [
   ["harnesses", "Harnesses"],
   ["workspaces", "Workspaces"],
+  ["general", "General"],
 ] as const;
 type Section = (typeof SECTIONS)[number][0];
 
@@ -53,7 +55,13 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           </button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {section === "harnesses" ? <HarnessSettings /> : <WorkspaceSettings />}
+          {section === "harnesses" ? (
+            <HarnessSettings />
+          ) : section === "workspaces" ? (
+            <WorkspaceSettings />
+          ) : (
+            <GeneralSettings />
+          )}
         </div>
       </div>
     </div>

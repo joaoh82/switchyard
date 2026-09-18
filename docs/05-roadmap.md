@@ -87,13 +87,22 @@ real prompt on macOS and Windows (flags are verified against `--help`; Claude Co
 hand on Linux), and the `stdin` transport against a harness that shows a trust or login dialog
 first — the paste would land in that dialog. WSL launch prefixes remain an open question.
 
-## M5 — Right panel
+## M5 — Right panel ✅
 
 - File watcher (debounced, `.gitignore`-aware). Changes tab (uncommitted + committed vs merge-base).
 - Files tab. Diff viewer + read-only file viewer. Open in editor.
 
 _Exit:_ while an agent works, the changes list and open diff update live, and stay responsive in a
 large repo (test against one with a big `node_modules`).
+
+_Notes:_ the diff viewer is CodeMirror 6's unified merge view (settling open question 9), loaded
+lazily with its grammars. Diffs cross IPC as the two versions of the file, not as a patch, so the
+viewer decides how much context to show. The watcher never interprets events: after a burst goes
+quiet it says "something changed" and the UI asks git again. On Linux it watches exactly the
+directories git does not ignore (inotify is per-directory, and a recursive watch would descend into
+`node_modules`), adding folders as they appear; macOS and Windows use one recursive watch and
+filter events through the ignore rules. Staging, committing and discarding from the panel are not
+part of this milestone.
 
 ## M6 — Session lifecycle
 

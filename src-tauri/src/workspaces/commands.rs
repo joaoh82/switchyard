@@ -52,6 +52,8 @@ pub struct WorkspaceSettingsDto {
 #[derive(Debug, Clone, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsInfo {
+    /// The "Open in editor" command; `None` tries the common editors in turn.
+    pub editor_command: Option<String>,
     pub workspaces: WorkspaceSettingsDto,
     pub default_worktree_root: String,
     /// Set while `SWITCHYARD_WORKTREE_ROOT` overrides the setting.
@@ -228,8 +230,10 @@ pub async fn harness_test(
 }
 
 fn settings_info(state: &AppState) -> IpcResult<SettingsInfo> {
-    let workspaces = state.settings.get().workspaces;
+    let settings = state.settings.get();
+    let workspaces = settings.workspaces;
     Ok(SettingsInfo {
+        editor_command: settings.general.editor_command,
         workspaces: WorkspaceSettingsDto {
             worktree_root: workspaces.worktree_root,
             branch_prefix: workspaces.branch_prefix,
@@ -372,6 +376,25 @@ pub async fn workspace_delete(app: AppHandle, id: String, force: bool) -> IpcRes
             settings: &settings.workspaces,
         }
         .delete(&id, force)
+    })
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn settings_save_general(
+    app: AppHandle,
+    editor_command: Option<String>,
+) -> IpcResult<SettingsInfo> {
+    blocking(app, move |state| {
+        let editor = editor_command
+            .map(|command| command.trim().to_owned())
+            .filter(|command| !command.is_empty());
+        state
+            .settings
+            .update(|settings| settings.general.editor_command = editor)
+            .map_err(save_failed)?;
+        settings_info(state)
     })
     .await
 }

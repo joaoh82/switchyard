@@ -3,6 +3,7 @@
 //! The frontend holds no truth: state lives here and the webview renders it. `commands` is the
 //! whole IPC surface and stays thin — real work belongs in the domain modules.
 
+mod changes;
 mod commands;
 mod env;
 mod error;
@@ -43,9 +44,16 @@ fn ipc_builder() -> Builder<tauri::Wry> {
             workspaces::commands::harness_test,
             workspaces::commands::settings_get,
             workspaces::commands::settings_save_workspaces,
+            workspaces::commands::settings_save_general,
             workspaces::commands::project_branches,
             workspaces::commands::workspace_create,
             workspaces::commands::workspace_delete,
+            changes::commands::workspace_changes,
+            changes::commands::workspace_diff,
+            changes::commands::workspace_files,
+            changes::commands::workspace_file,
+            changes::commands::workspace_watch,
+            changes::commands::open_in_editor,
             terminal::env_info,
             terminal::pty_spawn,
             terminal::pty_attach,
@@ -56,7 +64,10 @@ fn ipc_builder() -> Builder<tauri::Wry> {
             terminal::pty_close,
             terminal::pty_list,
         ])
-        .events(collect_events![terminal::PtyHostEvent])
+        .events(collect_events![
+            terminal::PtyHostEvent,
+            changes::commands::WorkspaceFilesChanged
+        ])
 }
 
 /// Release builds never write bindings: there is no source tree next to an installed app.

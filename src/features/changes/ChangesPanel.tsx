@@ -1,11 +1,123 @@
-import { PanelHeader } from "@/features/shell/PanelHeader";
+import { useEffect, useState } from "react";
+import { Group, Panel, Separator } from "react-resizable-panels";
+import { hasCore, ipc } from "@/lib/ipc";
+import { useChangesStore } from "@/stores/changes";
+import { useProjectsStore } from "@/stores/projects";
+import { ChangeList } from "./ChangeList";
+import { FileTree } from "./FileTree";
+import { Viewer } from "./Viewer";
+import { keyOf, titleOf } from "./viewing";
 
-/** Right panel: changed files, file tree and diff. Populated in M5. */
+type Tab = "changes" | "files";
+
+/** Right panel: what changed in the selected workspace, its files, and a viewer for either. */
 export function ChangesPanel() {
+  const selectedWorkspaceId = useProjectsStore((s) => s.selectedWorkspaceId);
+  const composing = useProjectsStore((s) => s.composingProjectId !== null);
+  const workspaceId = composing ? null : selectedWorkspaceId;
+
+  const changes = useChangesStore((s) => s.changes);
+  const error = useChangesStore((s) => s.error);
+  const viewing = useChangesStore((s) => s.viewing);
+  const [tab, setTab] = useState<Tab>("changes");
+  // Expansion belongs to one file: opening another, or closing the viewer, returns to the panel.
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const expanded = viewing !== null && expandedKey === keyOf(viewing);
+  /** Bumped on every file-system signal; open folders in the tree reload when it changes. */
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => void useChangesStore.getState().follow(workspaceId), [workspaceId]);
+
+  useEffect(() => {
+    if (!hasCore()) return;
+    const refresh = () => {
+      setRevision((value) => value + 1);
+      void useChangesStore.getState().refresh();
+    };
+    const unlisten = ipc.onWorkspaceFilesChanged((changedId) => {
+      if (changedId === useChangesStore.getState().workspaceId) refresh();
+    });
+    // The watcher is best-effort; coming back to the window always catches up.
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      void unlisten.then((stop) => stop());
+    };
+  }, []);
+
+  const count = changes ? changes.uncommitted.length + changes.committed.length : 0;
+  const tabClass =
+    "rounded px-2 py-0.5 text-[11px] font-semibold tracking-wider text-ink-faint uppercase hover:text-ink aria-selected:bg-raised aria-selected:text-ink";
+
+  const list = (
+    <div className="flex h-full min-h-0 flex-col">
+      {!workspaceId ? (
+        <p className="p-3 text-ink-faint">Select a workspace to see its changes.</p>
+      ) : error ? (
+        <p role="alert" className="p-3 text-red-400 select-text">
+          {error}
+        </p>
+      ) : tab === "files" ? (
+        <FileTree workspaceId={workspaceId} revision={revision} />
+      ) : changes ? (
+        <ChangeList changes={changes} />
+      ) : (
+        <p className="p-3 text-ink-faint">Loading…</p>
+      )}
+    </div>
+  );
+
   return (
     <aside aria-label="Changes" className="flex h-full flex-col bg-surface">
-      <PanelHeader title="Changes" />
-      <p className="p-3 text-ink-faint">Nothing to show.</p>
+      <header className="flex h-9 shrink-0 items-center gap-1 border-b border-line px-2">
+        <div role="tablist" className="flex gap-1">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "changes"}
+            onClick={() => setTab("changes")}
+            className={tabClass}
+          >
+            Changes{count > 0 ? ` ${count}` : ""}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "files"}
+            onClick={() => setTab("files")}
+            className={tabClass}
+          >
+            Files
+          </button>
+        </div>
+      </header>
+
+      {viewing && !expanded ? (
+        <Group orientation="vertical" className="min-h-0 flex-1">
+          <Panel id="list" defaultSize="40%" minSize={80}>
+            {list}
+          </Panel>
+          <Separator className="h-px bg-line outline-none hover:bg-accent data-[separator=active]:bg-accent" />
+          <Panel id="viewer" minSize={120}>
+            <Viewer expanded={false} onToggleExpanded={() => setExpandedKey(keyOf(viewing))} />
+          </Panel>
+        </Group>
+      ) : (
+        <div className="min-h-0 flex-1">{list}</div>
+      )}
+
+      {viewing && expanded && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-6">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={titleOf(viewing)}
+            className="h-full w-full max-w-6xl overflow-hidden rounded-lg border border-line bg-surface shadow-2xl shadow-black/50"
+          >
+            <Viewer expanded onToggleExpanded={() => setExpandedKey(null)} />
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
