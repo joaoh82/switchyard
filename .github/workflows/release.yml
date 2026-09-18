@@ -1,7 +1,8 @@
 name: Release
 
-# Pushing a version tag (v0.2.0, v0.2.0-beta.1) builds installers for every platform and attaches
-# them to a DRAFT release, which a maintainer reviews and publishes. See docs/releasing.md.
+# Pushing a version tag (v0.2.0, v0.2.0-beta.1) builds installers for every platform and publishes
+# them as a GitHub release. The release stays a draft while the builds upload and goes public only
+# if every platform succeeded, so nobody ever sees a half-filled one. See docs/releasing.md.
 on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
@@ -133,3 +134,16 @@ jobs:
           releaseId: ${{ needs.draft.outputs.release_id }}
           tauriScript: bun tauri
           args: ${{ matrix.args }}
+
+  publish:
+    name: Publish release
+    needs: [draft, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Every platform built — make the release public
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release edit "$TAG" --draft=false
+          gh release view "$TAG" --json url,assets -q '.url, (.assets[] | "  " + .name)'

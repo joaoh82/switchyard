@@ -90,7 +90,7 @@ bundle types:
 build-debug:
     bun tauri build --debug --no-bundle
 
-# Cut a release: bump the version, commit, tag and push; CI builds a draft release (docs/releasing.md)
+# Cut a release: bump the version, commit, tag and push; CI builds and publishes it (docs/releasing.md)
 [unix]
 release version:
     scripts/release.sh {{ version }}

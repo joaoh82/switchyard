@@ -140,7 +140,7 @@ Done:
       the app, CONTRIBUTING, Code of Conduct, SECURITY, issue and PR templates, `AGENTS.md`.
 - [x] Pre-publication audit of the repository and its whole history for secrets and personal data.
 - [x] Release workflow: a `v*` tag builds AppImage + deb + rpm, a universal dmg and NSIS + MSI
-      into a draft GitHub release; `just release <version>` cuts one. macOS signing and
+      into a GitHub release, published once every platform has built; `just release <version>` cuts one. macOS signing and
       notarization switch on when the Apple secrets are set. See [releasing](../releasing.md).
 
 To do:

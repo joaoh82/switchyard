@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Cut a release: bump the version everywhere, commit, tag, push. The tag triggers the Release
-# workflow, which builds installers into a draft release. See docs/releasing.md.
+# workflow, which builds installers and publishes the release. See docs/releasing.md.
 #
 # usage: scripts/release.sh <version>      e.g. 0.2.0 or 0.2.0-beta.1
 set -euo pipefail
@@ -37,7 +37,7 @@ git tag -a "$tag" -m "Switchyard $tag"
 git push origin main "$tag"
 
 echo
-echo "Pushed $tag. The Release workflow is building installers into a draft release:"
+echo "Pushed $tag. The Release workflow is building installers; it publishes the release by"
+echo "itself once every platform has succeeded (about 20 minutes):"
 echo "  https://github.com/joaoh82/switchyard/actions/workflows/release.yml"
-echo "When it finishes, review and publish the draft:"
 echo "  https://github.com/joaoh82/switchyard/releases"

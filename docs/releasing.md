@@ -1,7 +1,11 @@
 # Releasing
 
 A release is a **version tag**. Pushing `v0.2.0` makes GitHub Actions build installers for Linux,
-macOS and Windows and attach them to a **draft** release. You read it over and publish it.
+macOS and Windows and publish them as a GitHub release — no further clicks.
+
+While the builds run, the release exists only as a draft. It is made public by the last job, and
+only if **every** platform built; if one fails, the draft stays hidden for you to inspect, fix and
+re-run.
 
 ## Cutting a release
 
@@ -14,7 +18,12 @@ That recipe checks the tree is clean and on `main`, runs `just check`, sets the 
 pushes both. Then:
 
 1. Watch the run: `just ci-watch`, or the repository's _Actions_ tab. About 20 minutes.
-2. Open the draft under _Releases_, edit the generated notes, and press **Publish**.
+2. The release appears under _Releases_ with notes generated from the commits since the last tag.
+   Edit them afterwards if you like.
+
+If a build fails: fix the cause, then re-run the failed jobs from the _Actions_ tab (or run the
+_Release_ workflow by hand with the same tag). To abandon the attempt instead, delete the draft
+and the tag: `gh release delete v0.2.0 --cleanup-tag`.
 
 Versions follow [semver](https://semver.org). A tag with a suffix — `v0.2.0-beta.1` — is marked as
 a pre-release automatically.
