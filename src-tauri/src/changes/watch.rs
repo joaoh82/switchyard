@@ -187,7 +187,11 @@ mod tests {
             counter.fetch_add(1, Ordering::SeqCst);
         })
         .unwrap();
-        std::thread::sleep(Duration::from_millis(200)); // let the OS arm the watches
+        // Let the OS arm the watches — and let the fixture's own writes drain. macOS's FSEvents
+        // happily reports changes from just *before* a watch began, so without this the repo
+        // being set up can show up as a signal in the test that asserts there are none.
+        std::thread::sleep(QUIET * 3);
+        signals.store(0, Ordering::SeqCst);
         (watcher, signals)
     }
 
