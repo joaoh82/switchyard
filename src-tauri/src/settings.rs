@@ -23,13 +23,25 @@ pub struct Settings {
     pub harnesses: Vec<HarnessOverride>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GeneralSettings {
     /// The command "Open in editor" runs, e.g. `code` or `zed --new`. It is given the workspace
     /// folder and then the file. `None` tries the common editors in turn.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub editor_command: Option<String>,
+    /// Send a desktop notification when an agent that was busy for a while goes quiet and
+    /// nobody is looking at it.
+    pub notify_when_quiet: bool,
+}
+
+impl Default for GeneralSettings {
+    fn default() -> Self {
+        Self {
+            editor_command: None,
+            notify_when_quiet: true,
+        }
+    }
 }
 
 impl GeneralSettings {

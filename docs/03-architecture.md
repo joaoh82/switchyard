@@ -184,7 +184,9 @@ projects    id, name, root_path (unique), sort_order, created_at
 workspaces  id, project_id → projects (cascade), kind ('local' | 'worktree'), name, path,
             branch, base_branch, status ('active' | 'archived'), sort_order, created_at
 ui_state    key, value (JSON)   -- selection, collapsed projects, last-used picks
-sessions    (M6) id, workspace_id, harness_id, model, effort, harness_session_id, …
+sessions    id, workspace_id → workspaces (cascade), harness_id, model, effort,
+            harness_session_id, title, forked_from, state ('running' | 'ended'), exit_code,
+            pty_session_id, started_at, ended_at
 ```
 
 `local` is a real row (`kind = 'local'`, `path = root_path`, exactly one per project) so the rest of
@@ -194,7 +196,22 @@ folder has vanished is flagged `missing`, not dropped — it comes back by itsel
 Removing a project only forgets it; nothing on disk is touched. Harness definitions are _not_ in
 the DB; they live in the settings file.
 
-Live sessions are not in the database either — the PTY host owns them. Each carries a `workspace`
+**Session records** are what let a conversation outlive its process. One row per _harness
+conversation_ (shells have nothing to come back to): which harness, and the harness's own id for
+the conversation when we chose it. The PTY session carries a `record` label pointing at its row.
+When the process exits the core settles the row _before_ announcing the exit; rows still `running`
+at startup died with the previous run and are ended without an exit code ("interrupted").
+**Resume** reuses the row with `resume_args`; **Fork** makes a new row (`forked_from`) and passes
+`{new_session_id}` so the copy is resumable too. An archived workspace keeps its rows — and its
+path — so restoring it puts the folder back where the harness filed its conversations.
+
+**Activity.** The PTY host reports `Busy` when output starts and `Quiet { busyMs }` once nothing
+has been printed for 3 s. Agents animate a spinner while they think, so for them silence means
+"waiting for you". The UI turns this into status dots, marks work that finished unwatched, and
+sends a desktop notification for bursts of 8 s or more — never for shells, and never while you
+are looking at the terminal. Nothing is ever parsed out of the output.
+
+Live sessions themselves are not in the database — the PTY host owns them. Each carries a `workspace`
 label, which is how terminal tabs find their workspace after a webview reload.
 
 ## Cross-platform notes & risks

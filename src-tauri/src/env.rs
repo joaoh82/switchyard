@@ -33,11 +33,33 @@ pub struct ShellEnv {
     pub warning: Option<String>,
 }
 
+/// Variables by which a coding agent tells its children "you are running inside my session".
+/// When Switchyard itself was started from a terminal inside an agent (say, `just dev` run by
+/// Claude Code), they would leak into every harness we launch, which then behaves as a nested
+/// child — Claude Code, for one, stops saving its transcript, so the session can never be
+/// resumed. They describe a process that is not ours; user configuration is left alone.
+const FOREIGN_SESSION_MARKERS: &[&str] = &[
+    "CLAUDECODE",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_EXECPATH",
+    "CLAUDE_CODE_MESSAGING_SOCKET",
+    "CLAUDE_CODE_MESSAGING_TOKEN",
+    "CLAUDE_CODE_SESSION_ATTENDED",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_PID",
+];
+
+fn without_foreign_sessions(mut vars: BTreeMap<String, String>) -> BTreeMap<String, String> {
+    vars.retain(|name, _| !FOREIGN_SESSION_MARKERS.contains(&name.as_str()));
+    vars
+}
+
 impl ShellEnv {
     pub fn resolve() -> Self {
         match platform::from_login_shell() {
             Ok(Some(vars)) => Self {
-                vars,
+                vars: without_foreign_sessions(vars),
                 source: EnvSource::LoginShell,
                 warning: None,
             },
@@ -48,7 +70,7 @@ impl ShellEnv {
 
     fn from_process(warning: Option<String>) -> Self {
         Self {
-            vars: std::env::vars().collect(),
+            vars: without_foreign_sessions(std::env::vars().collect()),
             source: EnvSource::Process,
             warning,
         }
@@ -268,6 +290,27 @@ mod tests {
             "Unix names are case-sensitive"
         );
         assert_eq!(lookup(&vars, "Path", false), Some("C:\\Windows"));
+    }
+
+    #[test]
+    fn an_enclosing_agents_session_markers_do_not_reach_our_harnesses() {
+        let vars: BTreeMap<String, String> = [
+            ("CLAUDECODE", "1"),
+            ("CLAUDE_CODE_CHILD_SESSION", "1"),
+            ("CLAUDE_CODE_SESSION_ID", "abc"),
+            // Configuration, not a session marker: the user set these on purpose.
+            ("CLAUDE_CODE_USE_BEDROCK", "1"),
+            ("ANTHROPIC_API_KEY", "sk-test"),
+            ("PATH", "/bin"),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_owned(), v.to_owned()))
+        .collect();
+        let kept: Vec<_> = without_foreign_sessions(vars).into_keys().collect();
+        assert_eq!(
+            kept,
+            ["ANTHROPIC_API_KEY", "CLAUDE_CODE_USE_BEDROCK", "PATH"]
+        );
     }
 
     #[test]

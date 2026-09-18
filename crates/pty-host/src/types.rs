@@ -112,6 +112,8 @@ pub struct SessionInfo {
     /// Whether the program has printed anything yet. With `idle_ms` this tells "still starting"
     /// from "started and now waiting", without anyone parsing what it printed.
     pub has_output: bool,
+    /// Producing output right now (see [`HostEvent::Busy`] / [`HostEvent::Quiet`]).
+    pub busy: bool,
     /// Milliseconds since the session last produced output (saturating). Drives "busy / waiting" indicators
     /// without anyone having to parse what the program printed.
     pub idle_ms: u32,
@@ -120,10 +122,20 @@ pub struct SessionInfo {
 /// Host-wide notifications, delivered to the sink given to [`crate::PtyHost::new`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
-#[serde(rename_all = "camelCase", tag = "type")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
 pub enum HostEvent {
     /// The session's process ended and all of its output has been delivered.
     Exited { id: SessionId, exit: ExitInfo },
+    /// The session started producing output after being quiet.
+    Busy { id: SessionId },
+    /// The session has printed nothing for the host's quiet period: whatever runs in it is
+    /// probably waiting for input. `busy_ms` is how long the burst of activity lasted, which
+    /// lets a client tell an agent finishing minutes of work from the echo of a keystroke.
+    Quiet { id: SessionId, busy_ms: u32 },
 }
 
 #[derive(Debug, thiserror::Error)]

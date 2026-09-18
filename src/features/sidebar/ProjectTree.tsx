@@ -1,10 +1,19 @@
 import { useState } from "react";
 import type { Project, Workspace } from "@/lib/ipc";
 import { native } from "@/lib/native";
-import { useProjectsStore } from "@/stores/projects";
+import { recall, useProjectsStore } from "@/stores/projects";
 import { useTerminalStore } from "@/stores/terminals";
-import { deleteWorkspace, enterWorkspace, removeProject } from "./actions";
+import {
+  archiveWorkspace,
+  deleteWorkspace,
+  enterWorkspace,
+  removeProject,
+  restoreWorkspace,
+} from "./actions";
+import { summarise } from "@/features/terminal/activity";
+import { StatusDot } from "@/features/terminal/StatusDot";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
+import { RenameDialog } from "./RenameDialog";
 
 export function ProjectTree() {
   const projects = useProjectsStore((s) => s.projects);
@@ -91,18 +100,51 @@ function ProjectNode(props: { project: Project; isFirst: boolean; isLast: boolea
 
       {expanded && (
         <ul role="group">
-          {project.workspaces.map((workspace) => (
-            <WorkspaceNode key={workspace.id} workspace={workspace} disabled={project.missing} />
-          ))}
+          {project.workspaces
+            .filter((workspace) => !workspace.archived)
+            .map((workspace) => (
+              <WorkspaceNode key={workspace.id} workspace={workspace} disabled={project.missing} />
+            ))}
           {composing && (
             <li className="flex h-7 items-center gap-2 bg-raised pr-2 pl-7 text-ink-muted italic">
               <span aria-hidden className="size-1.5 shrink-0 rounded-full border border-accent" />
               new workspace…
             </li>
           )}
+          <ArchivedGroup project={project} />
         </ul>
       )}
       {menuAt && <ContextMenu at={menuAt} items={items} onClose={() => setMenuAt(null)} />}
+    </li>
+  );
+}
+
+/** Archived workspaces, tucked away under their project until someone goes looking. */
+function ArchivedGroup({ project }: { project: Project }) {
+  const archived = project.workspaces.filter((workspace) => workspace.archived);
+  const key = `sidebar.showArchived.${project.id}`;
+  const open = useProjectsStore((s) => recall(s.ui, key, false));
+  if (archived.length === 0) return null;
+
+  return (
+    <li role="treeitem" aria-expanded={open} aria-label="Archived workspaces">
+      <button
+        type="button"
+        onClick={() => useProjectsStore.getState().remember(key, !open)}
+        className="flex h-6 w-full items-center gap-1 pl-7 text-left text-[11px] text-ink-faint hover:text-ink-muted"
+      >
+        <span aria-hidden className={`w-3 text-[9px] ${open ? "rotate-90" : ""}`}>
+          ▶
+        </span>
+        archived ({archived.length})
+      </button>
+      {open && (
+        <ul role="group">
+          {archived.map((workspace) => (
+            <WorkspaceNode key={workspace.id} workspace={workspace} disabled={project.missing} />
+          ))}
+        </ul>
+      )}
     </li>
   );
 }
@@ -111,24 +153,35 @@ function WorkspaceNode({ workspace, disabled }: { workspace: Workspace; disabled
   const selected = useProjectsStore(
     (s) => s.selectedWorkspaceId === workspace.id && s.composingProjectId === null,
   );
-  const running = useTerminalStore((s) =>
-    s.tabs.some((tab) => tab.workspaceId === workspace.id && !tab.exit),
-  );
+  const allTabs = useTerminalStore((s) => s.tabs);
+  const tabs = allTabs.filter((tab) => tab.workspaceId === workspace.id);
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const [renaming, setRenaming] = useState(false);
   const head = workspace.head;
   const isWorktree = workspace.kind === "worktree";
-  const unusable = disabled || workspace.missing;
+  const gone = workspace.missing || workspace.archived;
+  const unusable = disabled || gone;
 
   const items: MenuItem[] = [
-    {
-      label: "Reveal in file manager",
-      disabled: unusable,
-      onSelect: () => void native.revealInFileManager(workspace.path).catch(console.error),
-    },
+    gone
+      ? {
+          label: workspace.archived ? "Restore workspace" : "Restore from its branch",
+          disabled: disabled || !isWorktree,
+          onSelect: () => void restoreWorkspace(workspace),
+        }
+      : {
+          label: "Reveal in file manager",
+          disabled,
+          onSelect: () => void native.revealInFileManager(workspace.path).catch(console.error),
+        },
     ...(isWorktree
       ? [
+          { label: "Rename…", onSelect: () => setRenaming(true) },
+          ...(gone
+            ? []
+            : [{ label: "Archive…", onSelect: () => void archiveWorkspace(workspace) }]),
           {
-            label: "Delete workspace…",
+            label: workspace.archived ? "Delete for good…" : "Delete workspace…",
             danger: true,
             onSelect: () => void deleteWorkspace(workspace),
           },
@@ -151,13 +204,12 @@ function WorkspaceNode({ workspace, disabled }: { workspace: Workspace; disabled
           type="button"
           disabled={unusable}
           onClick={() => enterWorkspace(workspace.id)}
-          title={workspace.path}
-          className="flex h-full min-w-0 flex-1 items-center gap-2 pr-1 pl-7 text-left disabled:opacity-40"
+          title={workspace.archived ? `Archived — was at ${workspace.path}` : workspace.path}
+          className={`flex h-full min-w-0 flex-1 items-center gap-2 pr-1 text-left disabled:opacity-40 ${
+            workspace.archived ? "pl-11" : "pl-7"
+          }`}
         >
-          <span
-            aria-hidden
-            className={`size-1.5 shrink-0 rounded-full ${running ? "bg-accent" : "bg-line"}`}
-          />
+          <StatusDot activity={summarise(tabs)} attention={tabs.some((tab) => tab.attention)} />
           <span className={`truncate ${workspace.missing ? "line-through" : ""}`}>
             {workspace.name}
           </span>
@@ -187,6 +239,7 @@ function WorkspaceNode({ workspace, disabled }: { workspace: Workspace; disabled
         )}
       </div>
       {menuAt && <ContextMenu at={menuAt} items={items} onClose={() => setMenuAt(null)} />}
+      {renaming && <RenameDialog workspace={workspace} onClose={() => setRenaming(false)} />}
     </li>
   );
 }

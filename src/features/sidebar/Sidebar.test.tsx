@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { added, project, worktree } from "@/test/fixtures";
+import { added, project, record, worktree } from "@/test/fixtures";
 
 const core = vi.hoisted(() => ({
   uiStateLoad: vi.fn(),
@@ -12,6 +12,10 @@ const core = vi.hoisted(() => ({
   projectRemove: vi.fn(),
   projectsReorder: vi.fn(),
   workspaceDelete: vi.fn(),
+  workspaceArchive: vi.fn(),
+  workspaceRestore: vi.fn(),
+  workspaceRename: vi.fn(),
+  sessionsList: vi.fn(),
   ptySpawn: vi.fn(),
   ptyClose: vi.fn(),
 }));
@@ -28,6 +32,7 @@ vi.mock("@/lib/ipc", async (original) => ({
 vi.mock("@/lib/native", () => ({ native }));
 
 import { useProjectsStore } from "@/stores/projects";
+import { useSessionsStore } from "@/stores/sessions";
 import { useTerminalStore } from "@/stores/terminals";
 import { Sidebar } from "./Sidebar";
 
@@ -41,6 +46,7 @@ const shellIn = (workspace: string) => ({
   labels: { workspace },
   state: { status: "running" as const },
   hasOutput: true,
+  busy: false,
   idleMs: 0,
 });
 
@@ -59,6 +65,8 @@ describe("Sidebar", () => {
       fn.mockResolvedValue(undefined);
     }
     core.ptySpawn.mockImplementation(async ({ workspaceId }) => shellIn(workspaceId));
+    core.sessionsList.mockResolvedValue([]);
+    useSessionsStore.setState({ byWorkspace: {}, error: null });
     useProjectsStore.setState({
       projects: [],
       loaded: false,
@@ -271,6 +279,125 @@ describe("Sidebar", () => {
       expect(
         screen.queryByRole("button", { name: "More actions for local" }),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  it("entering a workspace with conversations to resume does not bury them under a new shell", async () => {
+    const user = userEvent.setup();
+    core.sessionsList.mockResolvedValue([record("r1", { workspaceId: "w-alpha" })]);
+    await renderSidebar("alpha");
+    await user.click(within(screen.getByRole("treeitem", { name: "local" })).getByRole("button"));
+    await vi.waitFor(() => expect(core.sessionsList).toHaveBeenCalledWith("w-alpha"));
+    expect(useProjectsStore.getState().selectedWorkspaceId).toBe("w-alpha");
+    expect(core.ptySpawn).not.toHaveBeenCalled();
+  });
+
+  describe("workspace housekeeping", () => {
+    async function withWorktree(overrides = {}) {
+      const user = userEvent.setup();
+      const app = project("app");
+      app.workspaces.push(worktree("app", "fix-login", overrides));
+      core.projectsList.mockResolvedValue([app]);
+      render(<Sidebar />);
+      await screen.findByRole("treeitem", { name: "app" });
+      return user;
+    }
+    const openMenu = async (user: ReturnType<typeof userEvent.setup>) =>
+      user.click(screen.getByRole("button", { name: "More actions for fix-login" }));
+
+    it("renames the label only, and says so", async () => {
+      const user = await withWorktree();
+      core.workspaceRename.mockResolvedValue(worktree("app", "fix-login", { name: "Login fix" }));
+      await openMenu(user);
+      await user.click(screen.getByRole("menuitem", { name: "Rename…" }));
+
+      const dialog = screen.getByRole("dialog", { name: "Rename workspace" });
+      expect(dialog).toHaveTextContent(/folder and the branch keep theirs/);
+      expect(within(dialog).getByRole("button", { name: "Rename" })).toBeDisabled();
+
+      const input = within(dialog).getByLabelText("Workspace name");
+      await user.clear(input);
+      await user.type(input, "Login fix{Enter}");
+
+      expect(core.workspaceRename).toHaveBeenCalledWith("w-app-fix-login", "Login fix");
+      expect(await screen.findByRole("treeitem", { name: "Login fix" })).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("keeps the rename dialog open with the reason when the core refuses", async () => {
+      const user = await withWorktree();
+      core.workspaceRename.mockRejectedValue({
+        code: "invalid_name",
+        message: "A workspace name needs 1 to 80 characters.",
+      });
+      await openMenu(user);
+      await user.click(screen.getByRole("menuitem", { name: "Rename…" }));
+      await user.type(screen.getByLabelText("Workspace name"), "x{Enter}");
+      expect(await screen.findByRole("alert")).toHaveTextContent("1 to 80 characters");
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+
+    it("archives after explaining what is kept, and tucks the workspace away", async () => {
+      const user = await withWorktree();
+      native.confirm.mockResolvedValue(true);
+      core.workspaceArchive.mockResolvedValue(undefined);
+      await openMenu(user);
+      await user.click(screen.getByRole("menuitem", { name: "Archive…" }));
+
+      expect(native.confirm).toHaveBeenCalledWith(
+        expect.stringMatching(/branch, its commits and the session history are kept/),
+        expect.objectContaining({ okLabel: "Archive" }),
+      );
+      expect(core.workspaceArchive).toHaveBeenCalledWith("w-app-fix-login", false);
+      const group = await screen.findByRole("treeitem", { name: "Archived workspaces" });
+      expect(group).toHaveTextContent("archived (1)");
+      expect(screen.queryByRole("treeitem", { name: "fix-login" })).not.toBeInTheDocument();
+    });
+
+    it("never archives over uncommitted work without a second, explicit yes", async () => {
+      const user = await withWorktree();
+      native.confirm.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+      core.workspaceArchive.mockRejectedValue({ code: "worktree_dirty", message: "dirty" });
+      await openMenu(user);
+      await user.click(screen.getByRole("menuitem", { name: "Archive…" }));
+      await vi.waitFor(() => expect(native.confirm).toHaveBeenCalledTimes(2));
+      expect(native.confirm).toHaveBeenLastCalledWith(
+        expect.stringMatching(/cannot be recovered/),
+        expect.objectContaining({ okLabel: "Archive anyway" }),
+      );
+      expect(core.workspaceArchive).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("treeitem", { name: "fix-login" })).toBeInTheDocument();
+    });
+
+    it("restores an archived workspace from its group and goes to it", async () => {
+      const user = await withWorktree({ archived: true, head: null });
+      core.workspaceRestore.mockResolvedValue(worktree("app", "fix-login"));
+      core.sessionsList.mockResolvedValue([record("r1", { workspaceId: "w-app-fix-login" })]);
+
+      await user.click(screen.getByRole("button", { name: /archived \(1\)/ }));
+      const archived = screen.getByRole("treeitem", { name: "fix-login" });
+      expect(within(archived).getAllByRole("button")[0]).toBeDisabled();
+
+      await openMenu(user);
+      expect(screen.queryByRole("menuitem", { name: "Archive…" })).not.toBeInTheDocument();
+      await user.click(screen.getByRole("menuitem", { name: "Restore workspace" }));
+
+      expect(core.workspaceRestore).toHaveBeenCalledWith("w-app-fix-login");
+      await vi.waitFor(() =>
+        expect(useProjectsStore.getState().selectedWorkspaceId).toBe("w-app-fix-login"),
+      );
+      expect(
+        screen.queryByRole("treeitem", { name: "Archived workspaces" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("offers to restore a workspace whose folder vanished", async () => {
+      const user = await withWorktree({ missing: true, head: null });
+      core.workspaceRestore.mockResolvedValue(worktree("app", "fix-login"));
+      await openMenu(user);
+      await user.click(screen.getByRole("menuitem", { name: "Restore from its branch" }));
+      expect(core.workspaceRestore).toHaveBeenCalledWith("w-app-fix-login");
+      await vi.waitFor(() => expect(screen.queryByText("missing")).not.toBeInTheDocument());
     });
   });
 

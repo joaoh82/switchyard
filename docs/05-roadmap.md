@@ -104,16 +104,31 @@ directories git does not ignore (inotify is per-directory, and a recursive watch
 filter events through the ignore rules. Staging, committing and discarding from the panel are not
 part of this milestone.
 
-## M6 — Session lifecycle
+## M6 — Session lifecycle ✅
 
-- Session records; Resume / Fork / New session; restore-on-launch (lazy: resume when the workspace
-  is first opened, not all at once).
+- Session records; Resume / Fork / New session; restore-on-launch (lazy: a workspace shows its past
+  conversations when it is opened — nothing is started until asked).
 - Status dots from PTY activity; desktop notification when a busy agent goes quiet.
-- Shell tabs alongside harness tabs. Rename / archive / delete workspace with safety prompts.
-- Worktree reconciliation on startup (adoption of unknown worktrees is done; still to do: offer to
-  clean up rows whose worktree git has forgotten).
+- Shell tabs alongside harness tabs. Rename / archive / restore / delete workspace with safety
+  prompts.
+- Worktree reconciliation: unknown worktrees are adopted (M3); a workspace whose folder vanished is
+  flagged and can be restored from its branch or deleted.
 
 _Exit:_ quit mid-task, relaunch, and be back in the same conversations within a couple of clicks.
+
+_Result:_ verified by hand on Linux with Claude Code — app killed mid-session, relaunched, workspace
+restored with the conversation listed as "interrupted", one click on Resume and the conversation
+was back. Fork checked against the same conversation (the copy keeps the context and is saved
+under the id we chose, so it is resumable too).
+
+_Notes:_
+
+- Harnesses that choose their own session ids (Codex, OpenCode) can only continue their most recent
+  conversation in a folder; older records say so instead of offering a Resume that would open the
+  wrong one. Reading their session stores would lift this (open question 12).
+- Found while testing: when Switchyard is started from a terminal inside an agent, that agent's
+  session markers (`CLAUDECODE`, `CLAUDE_CODE_CHILD_SESSION`, …) leaked into the harnesses, and
+  Claude Code then refuses to save its transcript. The launch environment now drops them.
 
 ## M7 — Ship
 

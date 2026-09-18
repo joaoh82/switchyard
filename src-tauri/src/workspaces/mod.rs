@@ -168,18 +168,106 @@ impl Workspaces<'_> {
     /// Remove a workspace's worktree and forget it. The **branch is kept**: commits are never
     /// thrown away here. Without `force`, uncommitted work makes this fail with `worktree_dirty`.
     pub fn delete(&self, workspace_id: &str, force: bool) -> IpcResult<()> {
+        let workspace = self.deletable(workspace_id)?;
+        if !workspace.archived {
+            self.remove_worktree(&workspace, force)?;
+        }
+        self.store.remove_worktree(&workspace.id)?;
+        Ok(())
+    }
+
+    /// Put a workspace away: its worktree leaves the disk, while its row, its branch and its
+    /// session history stay, so [`Self::restore`] can bring it back. Same `worktree_dirty` rule
+    /// as deleting — uncommitted work lives only in the folder we are about to remove.
+    pub fn archive(&self, workspace_id: &str, force: bool) -> IpcResult<()> {
+        let workspace = self.deletable(workspace_id)?;
+        if workspace.archived {
+            return Ok(());
+        }
+        if workspace.branch.is_none() {
+            return Err(IpcError::new(
+                "not_archivable",
+                "This workspace is not on a branch, so there would be nothing to restore it from. Delete it instead.",
+            ));
+        }
+        self.remove_worktree(&workspace, force)?;
+        self.store.set_workspace_archived(&workspace.id, true)?;
+        Ok(())
+    }
+
+    /// Check a workspace's branch out again at its old path. Works for archived workspaces and
+    /// for ones whose folder disappeared behind our back. The path matters: harnesses file
+    /// their conversations by folder, so the same folder is what makes old sessions resumable.
+    pub fn restore(&self, workspace_id: &str) -> IpcResult<WorkspaceRow> {
+        let workspace = self.deletable(workspace_id)?;
+        let root = self.project_root(&workspace)?;
+        let path = PathBuf::from(&workspace.path);
+        if path.exists() {
+            if workspace.archived {
+                return Err(IpcError::new(
+                    "already_exists",
+                    format!("{} is in the way.", path.display()),
+                ));
+            }
+            return Ok(workspace);
+        }
+        let branch = workspace.branch.as_deref().ok_or_else(|| {
+            IpcError::new("no_branch", "This workspace has no branch to restore from.")
+        })?;
+        if !self.git.branch_exists(&root, branch)? {
+            return Err(IpcError::new(
+                "unknown_branch",
+                format!("The branch \"{branch}\" no longer exists, so this workspace cannot be restored."),
+            ));
+        }
+        // Git may still list the vanished folder as a worktree holding the branch.
+        let _ = self.git.worktree_prune(&root);
+        if let Some(parent) = path.parent() {
+            self.ensure_dir(parent)?;
+        }
+        self.git.worktree_add_existing(&root, &path, branch)?;
+        self.store.set_workspace_archived(&workspace.id, false)?;
+        Ok(WorkspaceRow {
+            archived: false,
+            ..workspace
+        })
+    }
+
+    /// Change a workspace's display name. Folder and branch keep theirs: renaming those would
+    /// orphan the harness conversations filed under the folder.
+    pub fn rename(&self, workspace_id: &str, name: &str) -> IpcResult<WorkspaceRow> {
+        let workspace = self.deletable(workspace_id)?;
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 80 || name.chars().any(char::is_control) {
+            return Err(IpcError::new(
+                "invalid_name",
+                "A workspace name needs 1 to 80 characters.",
+            ));
+        }
+        self.store.rename_workspace(&workspace.id, name)?;
+        Ok(WorkspaceRow {
+            name: name.to_owned(),
+            ..workspace
+        })
+    }
+
+    /// A worktree workspace; `local` can be neither deleted, archived nor renamed.
+    fn deletable(&self, workspace_id: &str) -> IpcResult<WorkspaceRow> {
         let workspace = self.store.workspace(workspace_id)?.ok_or_else(|| {
             IpcError::new("unknown_workspace", "That workspace no longer exists.")
         })?;
         if workspace.kind != "worktree" {
             return Err(IpcError::new(
                 "not_deletable",
-                "The local workspace cannot be deleted.",
+                "The local workspace cannot be changed this way.",
             ));
         }
-        let root = self.project_root(&workspace)?;
-        let path = PathBuf::from(&workspace.path);
+        Ok(workspace)
+    }
 
+    fn remove_worktree(&self, workspace: &WorkspaceRow, force: bool) -> IpcResult<()> {
+        let root = self.project_root(workspace)?;
+        let path = PathBuf::from(&workspace.path);
         if path.exists() && root.is_dir() {
             match self.git.worktree_remove(&root, &path, force) {
                 Ok(()) => {}
@@ -199,7 +287,6 @@ impl Workspaces<'_> {
             // The folder was deleted behind our back; let git forget it as well.
             let _ = self.git.worktree_prune(&root);
         }
-        self.store.remove_worktree(&workspace.id)?;
         Ok(())
     }
 
@@ -643,6 +730,118 @@ mod tests {
                 .unwrap()
                 .name,
             "gone"
+        );
+    }
+
+    #[test]
+    fn archiving_removes_the_folder_and_restoring_brings_the_same_one_back() {
+        let fx = Fixture::new();
+        let ws = fx
+            .workspaces()
+            .create(&fx.project_id, None, "shelve me")
+            .unwrap();
+        let path = PathBuf::from(&ws.path);
+        std::fs::write(path.join("work.txt"), "committed work").unwrap();
+        fx.git.run(&path, &["add", "."]).unwrap();
+        fx.git.run(&path, &["commit", "-m", "work"]).unwrap();
+
+        fx.workspaces().archive(&ws.id, false).unwrap();
+        assert!(!path.exists());
+        let row = fx.store.workspace(&ws.id).unwrap().unwrap();
+        assert!(row.archived, "the row stays, flagged");
+        assert!(fx
+            .git
+            .branch_exists(&fx.repo, ws.branch.as_deref().unwrap())
+            .unwrap());
+        fx.workspaces().archive(&ws.id, false).unwrap(); // archiving twice is harmless
+
+        let restored = fx.workspaces().restore(&ws.id).unwrap();
+        assert!(!restored.archived);
+        assert_eq!(
+            restored.path, ws.path,
+            "same folder, so harness sessions still resolve"
+        );
+        assert_eq!(
+            std::fs::read_to_string(path.join("work.txt")).unwrap(),
+            "committed work"
+        );
+        assert!(!fx.store.workspace(&ws.id).unwrap().unwrap().archived);
+    }
+
+    #[test]
+    fn archiving_protects_uncommitted_work_like_deleting_does() {
+        let fx = Fixture::new();
+        let ws = fx
+            .workspaces()
+            .create(&fx.project_id, None, "dirty")
+            .unwrap();
+        std::fs::write(PathBuf::from(&ws.path).join("draft.txt"), "x").unwrap();
+        assert_eq!(
+            fx.workspaces().archive(&ws.id, false).unwrap_err().code,
+            "worktree_dirty"
+        );
+        assert!(!fx.store.workspace(&ws.id).unwrap().unwrap().archived);
+        fx.workspaces().archive(&ws.id, true).unwrap();
+        assert!(fx.store.workspace(&ws.id).unwrap().unwrap().archived);
+    }
+
+    #[test]
+    fn a_vanished_workspace_can_be_restored_and_an_archived_one_deleted() {
+        let fx = Fixture::new();
+        let ws = fx
+            .workspaces()
+            .create(&fx.project_id, None, "vanish")
+            .unwrap();
+        std::fs::remove_dir_all(&ws.path).unwrap();
+        // Git still believes the branch is checked out in the folder that is gone.
+        fx.workspaces().restore(&ws.id).unwrap();
+        assert!(PathBuf::from(&ws.path).join(".git").exists());
+
+        fx.workspaces().archive(&ws.id, false).unwrap();
+        fx.workspaces().delete(&ws.id, false).unwrap();
+        assert_eq!(fx.names(), ["local"]);
+    }
+
+    #[test]
+    fn restoring_needs_the_branch_to_still_exist() {
+        let fx = Fixture::new();
+        let ws = fx
+            .workspaces()
+            .create(&fx.project_id, None, "doomed")
+            .unwrap();
+        fx.workspaces().archive(&ws.id, false).unwrap();
+        fx.git
+            .branch_delete(&fx.repo, ws.branch.as_deref().unwrap())
+            .unwrap();
+        assert_eq!(
+            fx.workspaces().restore(&ws.id).unwrap_err().code,
+            "unknown_branch"
+        );
+    }
+
+    #[test]
+    fn renaming_changes_the_label_only() {
+        let fx = Fixture::new();
+        let ws = fx
+            .workspaces()
+            .create(&fx.project_id, None, "fix login")
+            .unwrap();
+        let renamed = fx
+            .workspaces()
+            .rename(&ws.id, "  Login: the sequel  ")
+            .unwrap();
+        assert_eq!(renamed.name, "Login: the sequel");
+        assert_eq!((renamed.path, renamed.branch), (ws.path, ws.branch));
+        for bad in ["", "   ", &"x".repeat(81), "new\nline"] {
+            assert_eq!(
+                fx.workspaces().rename(&ws.id, bad).unwrap_err().code,
+                "invalid_name"
+            );
+        }
+        let local = fx.store.workspaces().unwrap().remove(0);
+        assert_eq!(
+            fx.workspaces().rename(&local.id, "x").unwrap_err().code,
+            "not_deletable"
         );
     }
 

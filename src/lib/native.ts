@@ -1,5 +1,10 @@
 /** Native OS affordances: folder pickers, confirmation boxes, the file manager. */
 import { ask, open } from "@tauri-apps/plugin-dialog";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
 export const native = {
@@ -13,4 +18,10 @@ export const native = {
     ask(message, { ...options, kind: "warning", cancelLabel: "Cancel" }),
 
   revealInFileManager: (path: string): Promise<void> => revealItemInDir(path),
+
+  /** A desktop notification. Asks for permission the first time; silently does nothing without. */
+  async notify(title: string, body: string): Promise<void> {
+    const allowed = (await isPermissionGranted()) || (await requestPermission()) === "granted";
+    if (allowed) sendNotification({ title, body });
+  },
 };

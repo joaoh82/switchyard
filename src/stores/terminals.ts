@@ -4,6 +4,7 @@ import {
   errorMessage,
   HARNESS_LABEL,
   ipc,
+  RECORD_LABEL,
   WORKSPACE_LABEL,
   type ExitInfo,
   type HarnessRequest,
@@ -19,7 +20,16 @@ export interface TerminalTab {
   title: string;
   /** Set once the process has ended. The tab stays so its output can still be read. */
   exit: ExitInfo | null;
+  /** The harness conversation this terminal runs, if it is one. Shells have none. */
+  recordId: string | null;
+  /** Printing right now, as opposed to sitting at a prompt. */
+  busy: boolean;
+  /** Finished a long stretch of work while nobody was watching; cleared by looking at it. */
+  attention: boolean;
 }
+
+/** A burst of output shorter than this is somebody typing, not an agent finishing work. */
+export const WORTH_NOTICING_MS = 8_000;
 
 interface TerminalState {
   tabs: TerminalTab[];
@@ -39,8 +49,15 @@ interface TerminalState {
   close: (id: SessionId) => Promise<void>;
   /** Close every session of the given workspaces, e.g. when their project is removed. */
   closeWorkspaces: (workspaceIds: string[]) => Promise<void>;
+  /** Continue an ended conversation in a new terminal, replacing `replacing` if given. */
+  resume: (recordId: string, replacing?: SessionId) => Promise<boolean>;
+  /** Start a copy of a conversation in a new terminal next to the others. */
+  fork: (recordId: string) => Promise<boolean>;
   activate: (id: SessionId) => void;
   markExited: (id: SessionId, exit: ExitInfo) => void;
+  markBusy: (id: SessionId) => void;
+  /** Returns the tab if this was work worth telling the user about, else `null`. */
+  markQuiet: (id: SessionId, busyMs: number, watched: boolean) => TerminalTab | null;
   setRenderer: (kind: RendererKind) => void;
   setLastSize: (size: TermSize) => void;
   dismissError: () => void;
@@ -62,8 +79,14 @@ function tabFor(session: SessionInfo): TerminalTab | null {
     title: session.labels[HARNESS_LABEL] ?? name.replace(/\.(exe|cmd|bat)$/i, ""),
     exit:
       session.state.status === "exited" ? session.state.exit : (earlyExits.get(session.id) ?? null),
+    recordId: session.labels[RECORD_LABEL] ?? null,
+    busy: session.busy && session.state.status === "running",
+    attention: false,
   };
 }
+
+const update = (tabs: TerminalTab[], id: SessionId, patch: Partial<TerminalTab>) =>
+  tabs.map((tab) => (tab.id === id ? { ...tab, ...patch } : tab));
 
 export const useTerminalStore = create<TerminalState>((set, get) => ({
   tabs: [],
@@ -139,14 +162,51 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     await Promise.all(closing.map((tab) => ipc.ptyClose(tab.id).catch(() => {})));
   },
 
+  async resume(recordId, replacing) {
+    try {
+      const session = await ipc.sessionResume(recordId, get().lastSize);
+      if (replacing) await get().close(replacing);
+      get().adopt(session);
+      return true;
+    } catch (error) {
+      set({ error: errorMessage(error) });
+      return false;
+    }
+  },
+
+  async fork(recordId) {
+    try {
+      get().adopt(await ipc.sessionFork(recordId, get().lastSize));
+      return true;
+    } catch (error) {
+      set({ error: errorMessage(error) });
+      return false;
+    }
+  },
+
   activate: (id) =>
     set((state) => {
       const tab = state.tabs.find((candidate) => candidate.id === id);
-      return tab ? { active: { ...state.active, [tab.workspaceId]: id } } : state;
+      if (!tab) return state;
+      return {
+        active: { ...state.active, [tab.workspaceId]: id },
+        tabs: update(state.tabs, id, { attention: false }),
+      };
     }),
   markExited: (id, exit) => {
     if (!get().tabs.some((tab) => tab.id === id)) earlyExits.set(id, exit);
-    set((state) => ({ tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, exit } : tab)) }));
+    set((state) => ({ tabs: update(state.tabs, id, { exit, busy: false }) }));
+  },
+  markBusy: (id) => set((state) => ({ tabs: update(state.tabs, id, { busy: true }) })),
+  markQuiet(id, busyMs, watched) {
+    const tab = get().tabs.find((candidate) => candidate.id === id);
+    if (!tab) return null;
+    // Only agents finishing real work are news; shells and keystroke echoes are not.
+    const notable = tab.recordId !== null && busyMs >= WORTH_NOTICING_MS && !watched;
+    set((state) => ({
+      tabs: update(state.tabs, id, { busy: false, attention: tab.attention || notable }),
+    }));
+    return notable ? tab : null;
   },
   setRenderer: (renderer) => set({ renderer }),
   setLastSize: (lastSize) => set({ lastSize }),

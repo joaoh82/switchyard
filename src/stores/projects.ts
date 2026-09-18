@@ -7,6 +7,7 @@ import {
   type AddedProject,
   type NewWorkspace,
   type Project,
+  type Workspace,
   type SessionInfo,
 } from "@/lib/ipc";
 
@@ -53,6 +54,14 @@ interface ProjectsState {
     workspaceId: string,
     force?: boolean,
   ) => Promise<"deleted" | "dirty" | "failed">;
+  /** Put a workspace away: folder removed, branch and history kept. */
+  archiveWorkspace: (
+    workspaceId: string,
+    force?: boolean,
+  ) => Promise<"archived" | "dirty" | "failed">;
+  /** Bring back an archived or vanished workspace. */
+  restoreWorkspace: (workspaceId: string) => Promise<boolean>;
+  renameWorkspace: (workspaceId: string, name: string) => Promise<boolean>;
   remember: (key: string, value: unknown) => void;
   toggleCollapsed: (projectId: string) => void;
   dismiss: () => void;
@@ -245,6 +254,56 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
       return "deleted";
     },
 
+    async archiveWorkspace(workspaceId, force = false) {
+      try {
+        await ipc.workspaceArchive(workspaceId, force);
+      } catch (error) {
+        if (isIpcError(error) && error.code === "worktree_dirty") return "dirty";
+        set({ error: errorMessage(error) });
+        return "failed";
+      }
+      set((state) => ({
+        projects: patchWorkspace(state.projects, workspaceId, (workspace) => ({
+          ...workspace,
+          archived: true,
+          missing: false,
+          head: null,
+        })),
+        selectedWorkspaceId:
+          state.selectedWorkspaceId === workspaceId ? null : state.selectedWorkspaceId,
+      }));
+      save(KEYS.selected, get().selectedWorkspaceId);
+      return "archived";
+    },
+
+    async restoreWorkspace(workspaceId) {
+      try {
+        const restored = await ipc.workspaceRestore(workspaceId);
+        set((state) => ({
+          projects: patchWorkspace(state.projects, workspaceId, () => restored),
+          error: null,
+        }));
+        return true;
+      } catch (error) {
+        set({ error: errorMessage(error) });
+        return false;
+      }
+    },
+
+    async renameWorkspace(workspaceId, name) {
+      try {
+        const renamed = await ipc.workspaceRename(workspaceId, name);
+        set((state) => ({
+          projects: patchWorkspace(state.projects, workspaceId, () => renamed),
+          error: null,
+        }));
+        return true;
+      } catch (error) {
+        set({ error: errorMessage(error) });
+        return false;
+      }
+    },
+
     remember(key, value) {
       set((state) => ({ ui: { ...state.ui, [key]: JSON.stringify(value) } }));
       save(key, value);
@@ -276,6 +335,17 @@ export function useSelectedWorkspace() {
   const projects = useProjectsStore((state) => state.projects);
   const selected = useProjectsStore((state) => state.selectedWorkspaceId);
   return useMemo(() => findWorkspace(projects, selected), [projects, selected]);
+}
+
+function patchWorkspace(
+  projects: Project[],
+  workspaceId: string,
+  patch: (workspace: Workspace) => Workspace,
+): Project[] {
+  return projects.map((project) => ({
+    ...project,
+    workspaces: project.workspaces.map((w) => (w.id === workspaceId ? patch(w) : w)),
+  }));
 }
 
 /** A remembered value from persisted UI state (see `remember`), or `fallback`. */

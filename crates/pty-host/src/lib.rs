@@ -10,7 +10,7 @@
 //! attach(id, sink)  -> AttachmentId       detach(id, attachment)
 //! write(id, bytes) / paste(id, text)       resize(id, size)
 //! kill(id)                                remove(id)
-//! events: HostEvent::Exited
+//! events: HostEvent::{Exited, Busy, Quiet}
 //! ```
 //!
 //! Each session keeps a headless terminal (`vt100`) fed with everything the process prints. A
@@ -24,6 +24,7 @@ mod types;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
 
 use session::Session;
 pub use types::{
@@ -40,9 +41,15 @@ pub type OutputSink = Box<dyn FnMut(&[u8]) -> bool + Send>;
 /// Receives host-wide events. Called from session threads.
 pub type EventSink = Arc<dyn Fn(HostEvent) + Send + Sync>;
 
+/// How long a session must print nothing before it counts as quiet. Long enough that a program
+/// pausing between lines stays "busy"; agents animate a spinner while they think, so for them
+/// silence really does mean "waiting for you".
+pub const DEFAULT_QUIET_AFTER: Duration = Duration::from_secs(3);
+
 pub struct PtyHost {
     sessions: Mutex<HashMap<SessionId, Arc<Session>>>,
     events: EventSink,
+    quiet_after: Duration,
 }
 
 impl PtyHost {
@@ -50,12 +57,19 @@ impl PtyHost {
         Self {
             sessions: Mutex::new(HashMap::new()),
             events,
+            quiet_after: DEFAULT_QUIET_AFTER,
         }
+    }
+
+    /// Use a different quiet period for sessions spawned from now on.
+    pub fn with_quiet_after(mut self, quiet_after: Duration) -> Self {
+        self.quiet_after = quiet_after;
+        self
     }
 
     /// Start `plan.program` in a new PTY.
     pub fn spawn(&self, plan: LaunchPlan) -> Result<SessionInfo> {
-        let session = Session::spawn(plan, Arc::clone(&self.events))?;
+        let session = Session::spawn(plan, Arc::clone(&self.events), self.quiet_after)?;
         let info = session.info();
         self.lock().insert(info.id.clone(), session);
         Ok(info)

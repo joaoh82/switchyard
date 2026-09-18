@@ -1,6 +1,7 @@
 import { native } from "@/lib/native";
 import { errorMessage, type Project, type Workspace } from "@/lib/ipc";
 import { useProjectsStore } from "@/stores/projects";
+import { useSessionsStore } from "@/stores/sessions";
 import { useTerminalStore } from "@/stores/terminals";
 
 /**
@@ -25,10 +26,15 @@ async function visibly<T>(action: () => Promise<T>, fallback: T): Promise<T> {
  */
 export function enterWorkspace(workspaceId: string) {
   useProjectsStore.getState().select(workspaceId);
-  const terminals = useTerminalStore.getState();
-  if (!terminals.tabs.some((tab) => tab.workspaceId === workspaceId)) {
-    void terminals.open(workspaceId);
-  }
+  void visibly(async () => {
+    const hasTabs = () =>
+      useTerminalStore.getState().tabs.some((tab) => tab.workspaceId === workspaceId);
+    if (hasTabs()) return;
+    // A workspace with conversations to come back to shows them instead: opening a shell on
+    // top would bury the Resume button the user most likely came for.
+    const past = await useSessionsStore.getState().load(workspaceId);
+    if (past.length === 0 && !hasTabs()) await useTerminalStore.getState().open(workspaceId);
+  }, undefined);
 }
 
 /** Pick a folder and add it, offering to initialise git if it is not a repository yet. */
@@ -115,3 +121,36 @@ async function deleteWorkspaceUnguarded(workspace: Workspace) {
   );
   if (force) await projects.deleteWorkspace(workspace.id, true);
 }
+
+/**
+ * Archive a workspace: the folder goes, the branch and the session history stay, and it can be
+ * restored later. Uncommitted work gets the same explicit second confirmation as deleting.
+ */
+export const archiveWorkspace = (workspace: Workspace): Promise<void> =>
+  visibly(() => archiveWorkspaceUnguarded(workspace), undefined);
+
+async function archiveWorkspaceUnguarded(workspace: Workspace) {
+  const agreed = await native.confirm(
+    `Archive workspace "${workspace.name}"?\n\nIts folder is removed:\n${workspace.path}\n\nThe branch, its commits and the session history are kept, and "Restore" brings the workspace back in the same place. Terminals running in it will be closed.`,
+    { title: "Archive workspace", okLabel: "Archive" },
+  );
+  if (!agreed) return;
+
+  await useTerminalStore.getState().closeWorkspaces([workspace.id]);
+  const projects = useProjectsStore.getState();
+  if ((await projects.archiveWorkspace(workspace.id)) !== "dirty") return;
+
+  const force = await native.confirm(
+    `"${workspace.name}" has uncommitted changes or untracked files.\n\nArchiving removes the folder, and that work with it — it is in no commit and cannot be recovered. Commit it first if you want to keep it.`,
+    { title: "Uncommitted work will be lost", okLabel: "Archive anyway" },
+  );
+  if (force) await projects.archiveWorkspace(workspace.id, true);
+}
+
+/** Bring an archived or vanished workspace back and go to it. */
+export const restoreWorkspace = (workspace: Workspace): Promise<void> =>
+  visibly(async () => {
+    if (await useProjectsStore.getState().restoreWorkspace(workspace.id)) {
+      enterWorkspace(workspace.id);
+    }
+  }, undefined);

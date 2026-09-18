@@ -64,6 +64,8 @@ pub struct LaunchValues {
     pub model: Option<String>,
     pub effort: Option<String>,
     pub session_id: Option<String>,
+    /// When forking: the id the *new* conversation should get, so it can be resumed later too.
+    pub new_session_id: Option<String>,
 }
 
 impl HarnessDef {
@@ -83,6 +85,16 @@ impl HarnessDef {
             .into_iter()
             .flat_map(|group| expand(group, values))
             .collect()
+    }
+
+    /// Whether a fork started with [`Self::continue_args`] gets an id we choose — and so can be
+    /// resumed by id afterwards.
+    pub fn fork_assigns_id(&self) -> bool {
+        self.session_id_mode == SessionIdMode::Assigned
+            && self
+                .fork_args
+                .iter()
+                .any(|arg| arg.contains("{new_session_id}"))
     }
 
     /// The argv for resuming (`fork = false`) or forking a previous session.
@@ -131,6 +143,7 @@ fn expand(group: &[String], values: &LaunchValues) -> Vec<String> {
         "model" => values.model.as_deref(),
         "effort" => values.effort.as_deref(),
         "session_id" => values.session_id.as_deref(),
+        "new_session_id" => values.new_session_id.as_deref(),
         _ => None,
     };
     let mut out = Vec::with_capacity(group.len());
@@ -160,7 +173,10 @@ fn expand(group: &[String], values: &LaunchValues) -> Vec<String> {
 }
 
 fn is_placeholder(name: &str) -> bool {
-    matches!(name, "prompt" | "model" | "effort" | "session_id")
+    matches!(
+        name,
+        "prompt" | "model" | "effort" | "session_id" | "new_session_id"
+    )
 }
 
 fn strings(items: &[&str]) -> Vec<String> {
@@ -181,7 +197,13 @@ pub fn builtin() -> Vec<HarnessDef> {
             session_args: strings(&["--session-id", "{session_id}"]),
             prompt_args: strings(&["{prompt}"]),
             resume_args: strings(&["--resume", "{session_id}"]),
-            fork_args: strings(&["--resume", "{session_id}", "--fork-session"]),
+            fork_args: strings(&[
+                "--resume",
+                "{session_id}",
+                "--fork-session",
+                "--session-id",
+                "{new_session_id}",
+            ]),
             efforts: strings(&["low", "medium", "high", "xhigh", "max"]),
             models: strings(&["fable", "opus", "sonnet", "haiku"]),
             prompt_transport: PromptTransport::Argv,
@@ -217,7 +239,13 @@ pub fn builtin() -> Vec<HarnessDef> {
             session_args: strings(&["--session-id", "{session_id}"]),
             prompt_args: strings(&["{prompt}"]),
             resume_args: strings(&["--resume", "{session_id}"]),
-            fork_args: strings(&["--resume", "{session_id}", "--fork-session"]),
+            fork_args: strings(&[
+                "--resume",
+                "{session_id}",
+                "--fork-session",
+                "--session-id",
+                "{new_session_id}",
+            ]),
             efforts: strings(&["low", "medium", "high"]),
             models: vec![],
             prompt_transport: PromptTransport::Argv,
@@ -428,6 +456,7 @@ mod tests {
             model: some(model),
             effort: some(effort),
             session_id: Some("11111111-2222-3333-4444-555555555555".into()),
+            new_session_id: Some("99999999-8888-7777-6666-555555555555".into()),
         }
     }
 
@@ -583,9 +612,16 @@ mod tests {
                 "11111111-2222-3333-4444-555555555555"
             ]
         );
+        // A fork names both conversations: the one it copies and the one it becomes.
         assert_eq!(
-            claude.continue_args(&v, true).last().unwrap(),
-            "--fork-session"
+            claude.continue_args(&v, true)[2..],
+            [
+                "--resume",
+                "11111111-2222-3333-4444-555555555555",
+                "--fork-session",
+                "--session-id",
+                "99999999-8888-7777-6666-555555555555"
+            ]
         );
         assert_eq!(
             find("codex", &[]).unwrap().continue_args(&v, false),

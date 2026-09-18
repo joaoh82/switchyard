@@ -36,7 +36,7 @@ export const commands = {
 	harnessTest: (def: HarnessDef, size: TermSize) => typedError<SessionInfo, IpcError>(__TAURI_INVOKE("harness_test", { def, size })),
 	settingsGet: () => typedError<SettingsInfo, IpcError>(__TAURI_INVOKE("settings_get")),
 	settingsSaveWorkspaces: (workspaces: WorkspaceSettingsDto) => typedError<SettingsInfo, IpcError>(__TAURI_INVOKE("settings_save_workspaces", { workspaces })),
-	settingsSaveGeneral: (editorCommand: string | null) => typedError<SettingsInfo, IpcError>(__TAURI_INVOKE("settings_save_general", { editorCommand })),
+	settingsSaveGeneral: (editorCommand: string | null, notifyWhenQuiet: boolean) => typedError<SettingsInfo, IpcError>(__TAURI_INVOKE("settings_save_general", { editorCommand, notifyWhenQuiet })),
 	projectBranches: (projectId: string) => typedError<BranchList, IpcError>(__TAURI_INVOKE("project_branches", { projectId })),
 	/**
 	 *  The core loop: make a worktree — on a new branch, or for an existing one — and start a harness in it with the user's
@@ -58,6 +58,21 @@ export const commands = {
 	workspaceWatch: (workspaceId: string | null) => typedError<null, IpcError>(__TAURI_INVOKE("workspace_watch", { workspaceId })),
 	/**  Open a file (or the workspace folder, when `path` is `None`) in the user's editor. */
 	openInEditor: (workspaceId: string, path: string | null) => typedError<null, IpcError>(__TAURI_INVOKE("open_in_editor", { workspaceId, path })),
+	sessionsList: (workspaceId: string) => typedError<SessionRecord[], IpcError>(__TAURI_INVOKE("sessions_list", { workspaceId })),
+	/**  Continue a conversation whose process has ended, in a new terminal. */
+	sessionResume: (id: string, size: TermSize) => typedError<SessionInfo, IpcError>(__TAURI_INVOKE("session_resume", { id, size })),
+	/**  Start a copy of a conversation — running or not — that goes its own way from here. */
+	sessionFork: (id: string, size: TermSize) => typedError<SessionInfo, IpcError>(__TAURI_INVOKE("session_fork", { id, size })),
+	/**  Drop a record from the history. The harness's own copy of the conversation is not touched. */
+	sessionForget: (id: string) => typedError<null, IpcError>(__TAURI_INVOKE("session_forget", { id })),
+	/**
+	 *  Put a workspace away: the worktree is removed, the branch and session history stay.
+	 *  Fails with `worktree_dirty` unless `force`.
+	 */
+	workspaceArchive: (id: string, force: boolean) => typedError<null, IpcError>(__TAURI_INVOKE("workspace_archive", { id, force })),
+	/**  Bring back an archived workspace, or one whose folder disappeared, at its old path. */
+	workspaceRestore: (id: string) => typedError<Workspace, IpcError>(__TAURI_INVOKE("workspace_restore", { id })),
+	workspaceRename: (id: string, name: string) => typedError<Workspace, IpcError>(__TAURI_INVOKE("workspace_rename", { id, name })),
 	envInfo: (reload: boolean) => typedError<EnvInfo, IpcError>(__TAURI_INVOKE("env_info", { reload })),
 	ptySpawn: (request: SpawnRequest) => typedError<SessionInfo, IpcError>(__TAURI_INVOKE("pty_spawn", { request })),
 	/**  Stream a session into `output`: first a snapshot that repaints the terminal, then live bytes. */
@@ -260,7 +275,15 @@ export type HeadInfo = {
 /**  Host-wide notifications, delivered to the sink given to [`crate::PtyHost::new`]. */
 export type HostEvent = 
 /**  The session's process ended and all of its output has been delivered. */
-{ type: "exited"; id: SessionId; exit: ExitInfo };
+{ type: "exited"; id: SessionId; exit: ExitInfo } | 
+/**  The session started producing output after being quiet. */
+{ type: "busy"; id: SessionId } | 
+/**
+ *  The session has printed nothing for the host's quiet period: whatever runs in it is
+ *  probably waiting for input. `busy_ms` is how long the burst of activity lasted, which
+ *  lets a client tell an agent finishing minutes of work from the echo of a keystroke.
+ */
+{ type: "quiet"; id: SessionId; busyMs: number };
 
 /**
  *  The one error shape that crosses IPC: a stable `code` for the UI to branch on and a
@@ -342,6 +365,8 @@ export type SessionInfo = {
 	 *  from "started and now waiting", without anyone parsing what it printed.
 	 */
 	hasOutput: boolean,
+	/**  Producing output right now (see [`HostEvent::Busy`] / [`HostEvent::Quiet`]). */
+	busy: boolean,
 	/**
 	 *  Milliseconds since the session last produced output (saturating). Drives "busy / waiting" indicators
 	 *  without anyone having to parse what the program printed.
@@ -349,11 +374,37 @@ export type SessionInfo = {
 	idleMs: number,
 };
 
+export type SessionRecord = {
+	id: string,
+	workspaceId: string,
+	harnessId: string,
+	/**  The harness's display name, or its id if it is no longer configured. */
+	harnessLabel: string,
+	model: string | null,
+	effort: string | null,
+	title: string,
+	forkedFrom: string | null,
+	running: boolean,
+	/**  The live PTY session, while running. */
+	ptySessionId: string | null,
+	exitCode: number | null,
+	/**  Ended without an exit status: the app quit or crashed underneath it. */
+	interrupted: boolean,
+	/**  Milliseconds since the Unix epoch. */
+	startedAt: number | null,
+	endedAt: number | null,
+	/**  Whether Resume / Fork can work, and why not when they cannot. */
+	resumable: boolean,
+	forkable: boolean,
+	unavailableReason: string | null,
+};
+
 export type SessionState = { status: "running" } | { status: "exited"; exit: ExitInfo };
 
 export type SettingsInfo = {
 	/**  The "Open in editor" command; `None` tries the common editors in turn. */
 	editorCommand: string | null,
+	notifyWhenQuiet: boolean,
 	workspaces: WorkspaceSettingsDto,
 	defaultWorktreeRoot: string,
 	/**  Set while `SWITCHYARD_WORKTREE_ROOT` overrides the setting. */
@@ -392,8 +443,13 @@ export type Workspace = {
 	path: string,
 	/**  What is checked out right now, asked of git at listing time. */
 	head: HeadInfo | null,
-	/**  The folder is gone. Only deleting the workspace makes sense then. */
+	/**
+	 *  The folder is gone though it should be there. It can be restored from its branch, or
+	 *  deleted.
+	 */
 	missing: boolean,
+	/**  Put away on purpose: no folder, but the branch and session history are kept. */
+	archived: boolean,
 };
 
 /**  Something changed on disk in the watched workspace; ask again. */

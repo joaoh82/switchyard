@@ -54,6 +54,7 @@ pub struct WorkspaceSettingsDto {
 pub struct SettingsInfo {
     /// The "Open in editor" command; `None` tries the common editors in turn.
     pub editor_command: Option<String>,
+    pub notify_when_quiet: bool,
     pub workspaces: WorkspaceSettingsDto,
     pub default_worktree_root: String,
     /// Set while `SWITCHYARD_WORKTREE_ROOT` overrides the setting.
@@ -181,6 +182,7 @@ pub async fn harness_preview(app: AppHandle, def: HarnessDef) -> IpcResult<Harne
             ),
             effort: def.efforts.first().cloned(),
             session_id: Some("0f8fad5b-d9cb-469f-a165-70867728950e".into()),
+            new_session_id: Some("7c9e6679-7425-40de-944b-e07fc1f90ae7".into()),
         };
         let with_command = |args: Vec<String>| {
             std::iter::once(def.command.clone())
@@ -223,6 +225,8 @@ pub async fn harness_test(
             args,
             labels: Default::default(),
             paste_when_ready: None,
+            // A test launch is not a conversation worth remembering.
+            record: None,
         };
         crate::terminal::start(state, resolved, None, size)
     })
@@ -233,6 +237,7 @@ fn settings_info(state: &AppState) -> IpcResult<SettingsInfo> {
     let settings = state.settings.get();
     let workspaces = settings.workspaces;
     Ok(SettingsInfo {
+        notify_when_quiet: settings.general.notify_when_quiet,
         editor_command: settings.general.editor_command,
         workspaces: WorkspaceSettingsDto {
             worktree_root: workspaces.worktree_root,
@@ -380,11 +385,74 @@ pub async fn workspace_delete(app: AppHandle, id: String, force: bool) -> IpcRes
     .await
 }
 
+fn with_workspaces<T>(
+    state: &AppState,
+    f: impl FnOnce(&Workspaces<'_>, &Git) -> IpcResult<T>,
+) -> IpcResult<T> {
+    let git = Git::new(&state.env())?;
+    let root = state.worktree_root()?;
+    let settings = state.settings.get();
+    f(
+        &Workspaces {
+            store: &state.store,
+            git: &git,
+            worktree_root: &root,
+            settings: &settings.workspaces,
+        },
+        &git,
+    )
+}
+
+/// Put a workspace away: the worktree is removed, the branch and session history stay.
+/// Fails with `worktree_dirty` unless `force`.
+#[tauri::command]
+#[specta::specta]
+pub async fn workspace_archive(app: AppHandle, id: String, force: bool) -> IpcResult<()> {
+    blocking(app, move |state| {
+        with_workspaces(state, |workspaces, _| workspaces.archive(&id, force))
+    })
+    .await
+}
+
+/// Bring back an archived workspace, or one whose folder disappeared, at its old path.
+#[tauri::command]
+#[specta::specta]
+pub async fn workspace_restore(app: AppHandle, id: String) -> IpcResult<Workspace> {
+    blocking(app, move |state| {
+        with_workspaces(state, |workspaces, git| {
+            let row = workspaces.restore(&id)?;
+            Ok(Projects {
+                store: &state.store,
+                git,
+            }
+            .describe_workspace(row))
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn workspace_rename(app: AppHandle, id: String, name: String) -> IpcResult<Workspace> {
+    blocking(app, move |state| {
+        with_workspaces(state, |workspaces, git| {
+            let row = workspaces.rename(&id, &name)?;
+            Ok(Projects {
+                store: &state.store,
+                git,
+            }
+            .describe_workspace(row))
+        })
+    })
+    .await
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn settings_save_general(
     app: AppHandle,
     editor_command: Option<String>,
+    notify_when_quiet: bool,
 ) -> IpcResult<SettingsInfo> {
     blocking(app, move |state| {
         let editor = editor_command
@@ -392,7 +460,10 @@ pub async fn settings_save_general(
             .filter(|command| !command.is_empty());
         state
             .settings
-            .update(|settings| settings.general.editor_command = editor)
+            .update(|settings| {
+                settings.general.editor_command = editor;
+                settings.general.notify_when_quiet = notify_when_quiet;
+            })
             .map_err(save_failed)?;
         settings_info(state)
     })

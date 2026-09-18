@@ -10,6 +10,7 @@ mod error;
 mod git;
 mod harness;
 mod projects;
+mod sessions;
 mod settings;
 mod state;
 mod store;
@@ -54,6 +55,13 @@ fn ipc_builder() -> Builder<tauri::Wry> {
             changes::commands::workspace_file,
             changes::commands::workspace_watch,
             changes::commands::open_in_editor,
+            sessions::sessions_list,
+            sessions::session_resume,
+            sessions::session_fork,
+            sessions::session_forget,
+            workspaces::commands::workspace_archive,
+            workspaces::commands::workspace_restore,
+            workspaces::commands::workspace_rename,
             terminal::env_info,
             terminal::pty_spawn,
             terminal::pty_attach,
@@ -93,12 +101,21 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
 
             let handle = app.handle().clone();
             let host = pty_host::PtyHost::new(std::sync::Arc::new(move |event| {
+                // Settle the record first, so a client reacting to the event reads the truth.
+                if let pty_host::HostEvent::Exited { id, exit } = &event {
+                    if let Some(state) = handle.try_state::<state::AppState>() {
+                        let _ = state
+                            .store
+                            .end_session_by_pty(&id.0, Some(i64::from(exit.code)));
+                    }
+                }
                 let _ = terminal::PtyHostEvent(event).emit(&handle);
             }));
             // `SWITCHYARD_DATA_DIR` keeps experiments and tests away from the real database.
@@ -109,6 +126,10 @@ pub fn run() {
             let database = data_dir.join("switchyard.db");
             let store = store::Store::open(&database)
                 .map_err(|e| format!("cannot open {}: {e}", database.display()))?;
+            // Nothing is running yet: sessions that claim to be died with the previous run.
+            store
+                .end_interrupted_sessions()
+                .map_err(|e| format!("cannot tidy session records: {e}"))?;
             // Settings sit next to the database when the data dir is overridden, otherwise in
             // the OS config directory.
             let config_dir = match std::env::var_os("SWITCHYARD_DATA_DIR") {

@@ -28,6 +28,7 @@ import {
   type Scope,
   type SessionId,
   type SessionInfo,
+  type SessionRecord,
   type SettingsInfo,
   type SpawnRequest,
   type TermSize,
@@ -58,6 +59,7 @@ export type {
   Scope,
   SessionId,
   SessionInfo,
+  SessionRecord,
   SettingsInfo,
   SpawnRequest,
   TermSize,
@@ -68,6 +70,8 @@ export type {
 /** Session labels: the workspace a session belongs to, and the harness it runs (if any). */
 export const WORKSPACE_LABEL = "workspace";
 export const HARNESS_LABEL = "harness";
+/** The label naming the session record (conversation) a terminal belongs to, if any. */
+export const RECORD_LABEL = "record";
 
 /** False in a plain browser tab and in unit tests, where there is no core to call. */
 export const hasCore = isTauri;
@@ -132,8 +136,22 @@ export const ipc = {
   /** Rejects with code `worktree_dirty` unless `force` is set. The branch is always kept. */
   workspaceDelete: (id: string, force = false) => done(commands.workspaceDelete(id, force)),
 
-  settingsSaveGeneral: (editorCommand: string | null) =>
-    unwrap(commands.settingsSaveGeneral(editorCommand)),
+  settingsSaveGeneral: (editorCommand: string | null, notifyWhenQuiet: boolean) =>
+    unwrap(commands.settingsSaveGeneral(editorCommand, notifyWhenQuiet)),
+
+  /** A workspace's harness conversations, newest first. */
+  sessionsList: (workspaceId: string) => unwrap(commands.sessionsList(workspaceId)),
+  /** Continue an ended conversation in a new terminal. */
+  sessionResume: (id: string, size: TermSize) => unwrap(commands.sessionResume(id, size)),
+  /** Start a copy of a conversation that goes its own way. */
+  sessionFork: (id: string, size: TermSize) => unwrap(commands.sessionFork(id, size)),
+  sessionForget: (id: string) => done(commands.sessionForget(id)),
+
+  /** Remove the worktree but keep branch and history. Rejects with `worktree_dirty` unless forced. */
+  workspaceArchive: (id: string, force = false) => done(commands.workspaceArchive(id, force)),
+  /** Bring back an archived or vanished workspace at its old path. */
+  workspaceRestore: (id: string) => unwrap(commands.workspaceRestore(id)),
+  workspaceRename: (id: string, name: string) => unwrap(commands.workspaceRename(id, name)),
 
   workspaceChanges: (workspaceId: string) => unwrap(commands.workspaceChanges(workspaceId)),
   /** Both versions of a file; the viewer computes the diff. */

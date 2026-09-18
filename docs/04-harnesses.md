@@ -97,17 +97,17 @@ Resume and fork need the harness's own session id. Two strategies:
 Checked against the CLIs installed on the planning machine on 2026-09-17 (`--help` output, not yet
 exercised end-to-end). Re-verify during M4; these flags move.
 
-|                   | **Claude Code** 2.1.273        | **Codex** 0.154.0                       | **Grok** 1.0.30                | **OpenCode** 1.18.31            |
-| ----------------- | ------------------------------ | --------------------------------------- | ------------------------------ | ------------------------------- |
-| command           | `claude`                       | `codex`                                 | `grok`                         | `opencode`                      |
-| model             | `--model {model}`              | `-m {model}`                            | `-m {model}`                   | `-m {model}` (`provider/model`) |
-| effort            | `--effort {effort}`            | `-c model_reasoning_effort="{effort}"`  | `--reasoning-effort {effort}`  | — (no flag)                     |
-| effort values     | low, medium, high, xhigh, max  | _verify_                                | _verify_                       | n/a                             |
-| prompt            | positional `{prompt}`          | positional `{prompt}`                   | positional `{prompt}`          | `--prompt {prompt}`             |
-| assign session id | `--session-id {uuid}`          | —                                       | `--session-id {uuid}`          | —                               |
-| resume            | `--resume {session_id}`        | `resume {session_id}` / `resume --last` | `--resume {session_id}`        | `--session {id}` / `--continue` |
-| fork              | `--resume {id} --fork-session` | `fork {session_id}` / `fork --last`     | `--resume {id} --fork-session` | `--continue --fork`             |
-| session_id_mode   | assigned                       | latest-in-cwd                           | assigned                       | latest-in-cwd                   |
+|                   | **Claude Code** 2.1.273                              | **Codex** 0.154.0                       | **Grok** 1.0.30                                      | **OpenCode** 1.18.31            |
+| ----------------- | ---------------------------------------------------- | --------------------------------------- | ---------------------------------------------------- | ------------------------------- |
+| command           | `claude`                                             | `codex`                                 | `grok`                                               | `opencode`                      |
+| model             | `--model {model}`                                    | `-m {model}`                            | `-m {model}`                                         | `-m {model}` (`provider/model`) |
+| effort            | `--effort {effort}`                                  | `-c model_reasoning_effort="{effort}"`  | `--reasoning-effort {effort}`                        | — (no flag)                     |
+| effort values     | low, medium, high, xhigh, max                        | _verify_                                | _verify_                                             | n/a                             |
+| prompt            | positional `{prompt}`                                | positional `{prompt}`                   | positional `{prompt}`                                | `--prompt {prompt}`             |
+| assign session id | `--session-id {uuid}`                                | —                                       | `--session-id {uuid}`                                | —                               |
+| resume            | `--resume {session_id}`                              | `resume {session_id}` / `resume --last` | `--resume {session_id}`                              | `--session {id}` / `--continue` |
+| fork              | `--resume {id} --fork-session --session-id {new_id}` | `fork --last`                           | `--resume {id} --fork-session --session-id {new_id}` | `--continue --fork`             |
+| session_id_mode   | assigned                                             | latest-in-cwd                           | assigned                                             | latest-in-cwd                   |
 
 Notes:
 

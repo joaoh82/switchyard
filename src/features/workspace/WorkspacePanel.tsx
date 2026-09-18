@@ -1,6 +1,9 @@
+import { useEffect } from "react";
 import { Composer } from "@/features/composer/Composer";
 import { BenchRunner } from "@/features/terminal/BenchRunner";
 import { bareHarness } from "@/features/terminal/quickLaunch";
+import { EndedBar } from "@/features/terminal/EndedBar";
+import { SessionHistory } from "@/features/terminal/SessionHistory";
 import { TerminalTabs } from "@/features/terminal/TerminalTabs";
 import { TerminalView } from "@/features/terminal/TerminalView";
 import { useTerminalSessions } from "@/features/terminal/useTerminalSessions";
@@ -8,6 +11,7 @@ import type { HarnessRequest, Project, Workspace } from "@/lib/ipc";
 import { useAppStore } from "@/stores/app";
 import { launchable, useHarnessStore } from "@/stores/harnesses";
 import { useProjectsStore, useSelectedWorkspace } from "@/stores/projects";
+import { useSessionsStore } from "@/stores/sessions";
 import { useTerminalStore } from "@/stores/terminals";
 
 /** Center panel: the composer while a workspace is being started, otherwise its terminals. */
@@ -46,6 +50,17 @@ function WorkspaceTerminals(props: {
 }) {
   const { project, workspace } = props;
   const activeId = useTerminalStore((s) => s.active[workspace.id]);
+  const activeTab = useTerminalStore((s) => s.tabs.find((tab) => tab.id === activeId));
+  const sessionError = useSessionsStore((s) => s.error);
+
+  // The history is what Resume and Fork are offered on; keep it fresh for the workspace in view.
+  useEffect(() => {
+    void useSessionsStore.getState().load(workspace.id);
+  }, [workspace.id]);
+  // Looking at a terminal is what clears its "finished, not seen yet" mark.
+  useEffect(() => {
+    if (activeId) useTerminalStore.getState().activate(activeId);
+  }, [activeId]);
   const error = useTerminalStore((s) => s.error);
   const dismissError = useTerminalStore((s) => s.dismissError);
   const open = useTerminalStore((s) => s.open);
@@ -65,6 +80,22 @@ function WorkspaceTerminals(props: {
           </button>
         </div>
       )}
+      {sessionError && (
+        <div
+          role="alert"
+          className="flex items-start gap-3 border-b border-line bg-raised px-3 py-2"
+        >
+          <p className="flex-1 text-red-400 select-text">{sessionError}</p>
+          <button
+            type="button"
+            onClick={() => useSessionsStore.getState().dismissError()}
+            className="text-ink-faint hover:text-ink"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+      {activeTab && <EndedBar tab={activeTab} />}
       <div className="min-h-0 flex-1">
         {/* Only the active terminal is mounted; the others keep running in the core and are
             repainted from a snapshot when they come back. `key` forces a fresh view per session. */}
@@ -75,10 +106,11 @@ function WorkspaceTerminals(props: {
             rendererOverride={props.rendererOverride}
           />
         ) : (
-          <Centered>
+          <div className="flex h-full flex-col items-center justify-center overflow-y-auto p-6 text-center">
             <p className="text-ink-muted">Nothing running in this workspace.</p>
             <LaunchButtons onLaunch={(harness) => void open(workspace.id, harness)} />
-          </Centered>
+            <SessionHistory workspaceId={workspace.id} />
+          </div>
         )}
       </div>
       <footer className="flex h-6 shrink-0 items-center gap-2 border-t border-line bg-surface px-3 font-mono text-[11px] whitespace-nowrap text-ink-faint *:shrink-0">

@@ -124,7 +124,7 @@ fn wait_for_exit(
             .unwrap_or_else(|_| panic!("timed out waiting for exit; host says {:?}", host.info(id)))
         {
             HostEvent::Exited { id: exited, exit } if &exited == id => return exit,
-            HostEvent::Exited { .. } => {}
+            _ => {}
         }
     }
 }
@@ -281,6 +281,51 @@ fn sessions_are_listed_until_removed() {
         host.info(&a.id),
         Err(HostError::UnknownSession(_))
     ));
+}
+
+#[test]
+fn a_burst_of_output_is_reported_as_busy_then_quiet() {
+    let (tx, events) = mpsc::channel();
+    let tx = Mutex::new(tx);
+    let host = Arc::new(
+        PtyHost::new(Arc::new(move |event| {
+            let _ = tx.lock().unwrap().send(event);
+        }))
+        .with_quiet_after(Duration::from_millis(300)),
+    );
+    // Print, stay silent well past the quiet period, print again, then linger.
+    let script = if cfg!(windows) {
+        "echo one&& ping -n 3 127.0.0.1 >NUL&& echo two&& ping -n 3 127.0.0.1 >NUL"
+    } else {
+        "echo one; sleep 1.5; echo two; sleep 1.5"
+    };
+    let session = host.spawn(shell(script)).unwrap();
+    let capture = Capture::default();
+    attach_terminal(&host, &session.id, &capture);
+
+    let mut seen = Vec::new();
+    loop {
+        match events
+            .recv_timeout(TIMEOUT)
+            .expect("timed out waiting for events")
+        {
+            HostEvent::Busy { .. } => seen.push("busy"),
+            HostEvent::Quiet { busy_ms, .. } => {
+                assert!(
+                    busy_ms < 1_000,
+                    "a one-line burst is short, got {busy_ms} ms"
+                );
+                seen.push("quiet");
+            }
+            HostEvent::Exited { .. } => break,
+        }
+    }
+    // ConPTY adds bursts of its own (startup, repaints), so only the shape is asserted:
+    // bursts alternate, there were at least two, and the session is idle once it has exited.
+    assert!(seen.len() >= 4, "{seen:?}");
+    assert_eq!(seen[0], "busy");
+    assert!(seen.windows(2).all(|pair| pair[0] != pair[1]), "{seen:?}");
+    assert!(!host.info(&session.id).unwrap().busy);
 }
 
 #[test]

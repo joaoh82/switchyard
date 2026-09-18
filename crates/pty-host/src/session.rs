@@ -63,10 +63,15 @@ struct View {
     state: SessionState,
     last_output: Instant,
     has_output: bool,
+    busy: bool,
 }
 
 impl Session {
-    pub(crate) fn spawn(plan: LaunchPlan, events: EventSink) -> Result<Arc<Self>> {
+    pub(crate) fn spawn(
+        plan: LaunchPlan,
+        events: EventSink,
+        quiet_after: Duration,
+    ) -> Result<Arc<Self>> {
         let size = plan.size.sanitized();
         let pair = native_pty_system()
             .openpty(PtySize {
@@ -113,6 +118,7 @@ impl Session {
                 state: SessionState::Running,
                 last_output: Instant::now(),
                 has_output: false,
+                busy: false,
             }),
             plan,
         });
@@ -144,7 +150,7 @@ impl Session {
         let pumped = Arc::clone(&session);
         thread::Builder::new()
             .name(name("pump"))
-            .spawn(move || pumped.pump(&rx, &events))?;
+            .spawn(move || pumped.pump(&rx, &events, quiet_after))?;
 
         Ok(session)
     }
@@ -161,6 +167,7 @@ impl Session {
             labels: self.plan.labels.clone(),
             state: view.state.clone(),
             has_output: view.has_output,
+            busy: view.busy,
             idle_ms: u32::try_from(view.last_output.elapsed().as_millis()).unwrap_or(u32::MAX),
         }
     }
@@ -245,10 +252,12 @@ impl Session {
         Ok(result?)
     }
 
-    fn pump(&self, rx: &Receiver<Msg>, events: &EventSink) {
+    fn pump(&self, rx: &Receiver<Msg>, events: &EventSink, quiet_after: Duration) {
         let mut exit: Option<ExitInfo> = None;
         let mut eof = false;
         let mut batch = Vec::new();
+        // When the current burst of output began, while there is one.
+        let mut busy_since: Option<Instant> = None;
 
         while !(eof && exit.is_some()) {
             // Once the child is gone, stop as soon as the PTY goes quiet.
@@ -256,6 +265,22 @@ impl Session {
                 match rx.recv_timeout(EXIT_DRAIN_QUIET) {
                     Ok(msg) => msg,
                     Err(_) => break,
+                }
+            } else if let Some(since) = busy_since {
+                // Mid-burst: wake up if the output stops, to say so.
+                match rx.recv_timeout(quiet_after) {
+                    Ok(msg) => msg,
+                    Err(RecvTimeoutError::Timeout) => {
+                        busy_since = None;
+                        self.view().busy = false;
+                        events(HostEvent::Quiet {
+                            id: self.id.clone(),
+                            // The burst ended when the output did, not when we noticed.
+                            busy_ms: millis(since.elapsed().saturating_sub(quiet_after)),
+                        });
+                        continue;
+                    }
+                    Err(RecvTimeoutError::Disconnected) => break,
                 }
             } else {
                 match rx.recv() {
@@ -281,6 +306,13 @@ impl Session {
             }
 
             if !batch.is_empty() {
+                if busy_since.is_none() {
+                    busy_since = Some(Instant::now());
+                    self.view().busy = true;
+                    events(HostEvent::Busy {
+                        id: self.id.clone(),
+                    });
+                }
                 let replies = self.deliver(&batch);
                 batch.clear();
                 if !replies.is_empty() {
@@ -303,7 +335,11 @@ impl Session {
             let mut io = self.io();
             (io.master.take(), io.writer.take())
         };
-        self.view().state = SessionState::Exited { exit: exit.clone() };
+        {
+            let mut view = self.view();
+            view.busy = false;
+            view.state = SessionState::Exited { exit: exit.clone() };
+        }
         events(HostEvent::Exited {
             id: self.id.clone(),
             exit,
@@ -357,6 +393,10 @@ impl Session {
     fn io(&self) -> MutexGuard<'_, Io> {
         self.io.lock().unwrap_or_else(PoisonError::into_inner)
     }
+}
+
+fn millis(duration: Duration) -> u32 {
+    u32::try_from(duration.as_millis()).unwrap_or(u32::MAX)
 }
 
 fn read_loop(mut reader: Box<dyn Read + Send>, tx: &Sender<Msg>) {

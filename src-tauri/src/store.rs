@@ -12,6 +12,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0001_init.sql"),
     include_str!("../migrations/0002_unique_workspace_path.sql"),
+    include_str!("../migrations/0003_sessions.sql"),
 ];
 
 #[derive(Debug, thiserror::Error)]
@@ -45,6 +46,42 @@ pub struct WorkspaceRow {
     /// create the branch (an existing branch was opened, or a worktree was adopted) — which also
     /// means the branch is not ours to delete when undoing.
     pub base_branch: Option<String>,
+    /// Archived: the worktree is gone from disk but the row, its branch and its session history
+    /// are kept, so it can be restored.
+    pub archived: bool,
+}
+
+/// One harness conversation. See `migrations/0003_sessions.sql`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionRow {
+    pub id: String,
+    pub workspace_id: String,
+    pub harness_id: String,
+    pub model: Option<String>,
+    pub effort: Option<String>,
+    pub harness_session_id: Option<String>,
+    pub title: String,
+    pub forked_from: Option<String>,
+    pub running: bool,
+    pub exit_code: Option<i64>,
+    pub pty_session_id: Option<String>,
+    /// Milliseconds since the Unix epoch.
+    pub started_at: i64,
+    pub ended_at: Option<i64>,
+}
+
+/// What is known about a session when it starts.
+#[derive(Debug, Clone, Default)]
+pub struct NewSession<'a> {
+    pub id: &'a str,
+    pub workspace_id: &'a str,
+    pub harness_id: &'a str,
+    pub model: Option<&'a str>,
+    pub effort: Option<&'a str>,
+    pub harness_session_id: Option<&'a str>,
+    pub title: &'a str,
+    pub forked_from: Option<&'a str>,
+    pub pty_session_id: &'a str,
 }
 
 pub struct Store {
@@ -139,13 +176,12 @@ impl Store {
             .find(|project| project.root_path == root_path))
     }
 
-    /// Active workspaces of every project; `local` first within each.
+    /// Workspaces of every project: `local` first, then active ones, then archived ones.
     pub fn workspaces(&self) -> StoreResult<Vec<WorkspaceRow>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT id, project_id, kind, name, path, branch, base_branch FROM workspaces
-             WHERE status = 'active'
-             ORDER BY project_id, kind = 'local' DESC, sort_order, created_at",
+            "SELECT id, project_id, kind, name, path, branch, base_branch, status FROM workspaces
+             ORDER BY project_id, kind = 'local' DESC, status = 'active' DESC, sort_order, created_at",
         )?;
         let rows = stmt.query_map([], workspace_from_row)?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -155,7 +191,7 @@ impl Store {
         Ok(self
             .conn()
             .query_row(
-                "SELECT id, project_id, kind, name, path, branch, base_branch FROM workspaces WHERE id = ?",
+                "SELECT id, project_id, kind, name, path, branch, base_branch, status FROM workspaces WHERE id = ?",
                 [id],
                 workspace_from_row,
             )
@@ -194,6 +230,7 @@ impl Store {
             path: path.to_owned(),
             branch: branch.map(str::to_owned),
             base_branch: base_branch.map(str::to_owned),
+            archived: false,
         })
     }
 
@@ -232,6 +269,120 @@ impl Store {
             "DELETE FROM workspaces WHERE id = ? AND kind = 'worktree'",
             [id],
         )? > 0)
+    }
+
+    /// Give a workspace a new display name. Its folder and branch keep theirs.
+    pub fn rename_workspace(&self, id: &str, name: &str) -> StoreResult<bool> {
+        Ok(self.conn().execute(
+            "UPDATE workspaces SET name = ? WHERE id = ? AND kind = 'worktree'",
+            [name, id],
+        )? > 0)
+    }
+
+    pub fn set_workspace_archived(&self, id: &str, archived: bool) -> StoreResult<bool> {
+        let status = if archived { "archived" } else { "active" };
+        Ok(self.conn().execute(
+            "UPDATE workspaces SET status = ? WHERE id = ? AND kind = 'worktree'",
+            [status, id],
+        )? > 0)
+    }
+
+    // --- sessions -----------------------------------------------------------------------------
+
+    pub fn add_session(&self, new: &NewSession<'_>) -> StoreResult<()> {
+        self.conn().execute(
+            "INSERT INTO sessions (id, workspace_id, harness_id, model, effort, harness_session_id,
+                                   title, forked_from, state, pty_session_id, started_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?)",
+            params![
+                new.id,
+                new.workspace_id,
+                new.harness_id,
+                new.model,
+                new.effort,
+                new.harness_session_id,
+                new.title,
+                new.forked_from,
+                new.pty_session_id,
+                now_ms()
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn session(&self, id: &str) -> StoreResult<Option<SessionRow>> {
+        Ok(self
+            .conn()
+            .query_row(
+                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?"),
+                [id],
+                session_from_row,
+            )
+            .optional()?)
+    }
+
+    /// A workspace's sessions, most recently started first.
+    pub fn sessions(&self, workspace_id: &str) -> StoreResult<Vec<SessionRow>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {SESSION_COLUMNS} FROM sessions WHERE workspace_id = ?
+             ORDER BY started_at DESC, rowid DESC"
+        ))?;
+        let rows = stmt.query_map([workspace_id], session_from_row)?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// A resumed session runs again, in a new PTY.
+    pub fn mark_session_running(&self, id: &str, pty_session_id: &str) -> StoreResult<()> {
+        self.conn().execute(
+            "UPDATE sessions SET state = 'running', pty_session_id = ?, exit_code = NULL,
+                                 ended_at = NULL, started_at = ?
+             WHERE id = ?",
+            params![pty_session_id, now_ms(), id],
+        )?;
+        Ok(())
+    }
+
+    /// The process behind a PTY session ended. Returns the record it belonged to, if any.
+    pub fn end_session_by_pty(
+        &self,
+        pty_session_id: &str,
+        exit_code: Option<i64>,
+    ) -> StoreResult<Option<String>> {
+        let conn = self.conn();
+        let id: Option<String> = conn
+            .query_row(
+                "SELECT id FROM sessions WHERE pty_session_id = ? AND state = 'running'",
+                [pty_session_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(id) = &id {
+            conn.execute(
+                "UPDATE sessions SET state = 'ended', exit_code = ?, pty_session_id = NULL, ended_at = ?
+                 WHERE id = ?",
+                params![exit_code, now_ms(), id],
+            )?;
+        }
+        Ok(id)
+    }
+
+    /// At startup nothing is running yet, so every row that claims to be was cut short when the
+    /// previous run ended. Returns how many there were.
+    pub fn end_interrupted_sessions(&self) -> StoreResult<usize> {
+        Ok(self.conn().execute(
+            "UPDATE sessions SET state = 'ended', exit_code = NULL, pty_session_id = NULL,
+                                 ended_at = COALESCE(ended_at, ?)
+             WHERE state = 'running'",
+            [now_ms()],
+        )?)
+    }
+
+    pub fn remove_session(&self, id: &str) -> StoreResult<bool> {
+        Ok(self
+            .conn()
+            .execute("DELETE FROM sessions WHERE id = ?", [id])?
+            > 0)
     }
 
     /// Forget a project and its workspaces. Returns whether it existed.
@@ -288,6 +439,28 @@ fn workspace_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRow>
         path: row.get(4)?,
         branch: row.get(5)?,
         base_branch: row.get(6)?,
+        archived: row.get::<_, String>(7)? == "archived",
+    })
+}
+
+const SESSION_COLUMNS: &str = "id, workspace_id, harness_id, model, effort, harness_session_id, \
+     title, forked_from, state, exit_code, pty_session_id, started_at, ended_at";
+
+fn session_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionRow> {
+    Ok(SessionRow {
+        id: row.get(0)?,
+        workspace_id: row.get(1)?,
+        harness_id: row.get(2)?,
+        model: row.get(3)?,
+        effort: row.get(4)?,
+        harness_session_id: row.get(5)?,
+        title: row.get(6)?,
+        forked_from: row.get(7)?,
+        running: row.get::<_, String>(8)? == "running",
+        exit_code: row.get(9)?,
+        pty_session_id: row.get(10)?,
+        started_at: row.get(11)?,
+        ended_at: row.get(12)?,
     })
 }
 
@@ -479,6 +652,134 @@ mod tests {
             ["l", "a", "c"],
             "the older of the two duplicates is kept"
         );
+    }
+
+    fn worktree(store: &Store) -> WorkspaceRow {
+        let project = store.add_project("app", "/code/app").unwrap();
+        store
+            .add_worktree(&project.id, "fix", "/wt/fix", Some("sy/fix"), Some("main"))
+            .unwrap()
+    }
+
+    fn new_session<'a>(id: &'a str, workspace_id: &'a str, pty: &'a str) -> NewSession<'a> {
+        NewSession {
+            id,
+            workspace_id,
+            harness_id: "claude",
+            harness_session_id: Some("h-1"),
+            title: "fix the login bug",
+            pty_session_id: pty,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_session_runs_ends_and_runs_again() {
+        let store = Store::in_memory();
+        let ws = worktree(&store);
+        store
+            .add_session(&new_session("s1", &ws.id, "pty-1"))
+            .unwrap();
+        assert!(store.session("s1").unwrap().unwrap().running);
+
+        assert_eq!(
+            store
+                .end_session_by_pty("pty-1", Some(0))
+                .unwrap()
+                .as_deref(),
+            Some("s1")
+        );
+        let ended = store.session("s1").unwrap().unwrap();
+        assert!(!ended.running);
+        assert_eq!(
+            (ended.exit_code, ended.pty_session_id.as_deref()),
+            (Some(0), None)
+        );
+        assert!(ended.ended_at.is_some());
+        assert_eq!(
+            store.end_session_by_pty("pty-1", Some(0)).unwrap(),
+            None,
+            "only once"
+        );
+
+        store.mark_session_running("s1", "pty-2").unwrap();
+        let resumed = store.session("s1").unwrap().unwrap();
+        assert!(resumed.running && resumed.ended_at.is_none() && resumed.exit_code.is_none());
+        assert_eq!(
+            resumed.harness_session_id.as_deref(),
+            Some("h-1"),
+            "same conversation"
+        );
+    }
+
+    #[test]
+    fn sessions_left_running_by_a_dead_app_are_ended_without_an_exit_code() {
+        let store = Store::in_memory();
+        let ws = worktree(&store);
+        store
+            .add_session(&new_session("s1", &ws.id, "pty-1"))
+            .unwrap();
+        store
+            .add_session(&new_session("s2", &ws.id, "pty-2"))
+            .unwrap();
+        store.end_session_by_pty("pty-2", Some(1)).unwrap();
+
+        assert_eq!(store.end_interrupted_sessions().unwrap(), 1);
+        let s1 = store.session("s1").unwrap().unwrap();
+        assert!(!s1.running && s1.exit_code.is_none());
+        assert_eq!(
+            store.session("s2").unwrap().unwrap().exit_code,
+            Some(1),
+            "left alone"
+        );
+    }
+
+    #[test]
+    fn sessions_are_listed_newest_first_and_go_with_their_workspace() {
+        let store = Store::in_memory();
+        let ws = worktree(&store);
+        store
+            .add_session(&new_session("old", &ws.id, "p1"))
+            .unwrap();
+        store
+            .add_session(&NewSession {
+                forked_from: Some("old"),
+                ..new_session("new", &ws.id, "p2")
+            })
+            .unwrap();
+        let ids: Vec<_> = store
+            .sessions(&ws.id)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(ids, ["new", "old"]);
+
+        assert!(store.remove_session("old").unwrap());
+        assert_eq!(
+            store.session("new").unwrap().unwrap().forked_from,
+            None,
+            "the link is cleared"
+        );
+
+        store.remove_worktree(&ws.id).unwrap();
+        assert!(store.sessions(&ws.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn workspaces_can_be_renamed_and_archived_but_local_cannot() {
+        let store = Store::in_memory();
+        let ws = worktree(&store);
+        assert!(store.rename_workspace(&ws.id, "login fix").unwrap());
+        assert!(store.set_workspace_archived(&ws.id, true).unwrap());
+        let row = store.workspace(&ws.id).unwrap().unwrap();
+        assert_eq!((row.name.as_str(), row.archived), ("login fix", true));
+
+        let all = store.workspaces().unwrap();
+        assert_eq!(all.last().unwrap().id, ws.id, "archived ones sort last");
+        let local = all.iter().find(|w| w.kind == "local").unwrap();
+        assert!(!store.rename_workspace(&local.id, "x").unwrap());
+        assert!(!store.set_workspace_archived(&local.id, true).unwrap());
     }
 
     #[test]

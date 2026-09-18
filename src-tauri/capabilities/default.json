@@ -9,6 +9,7 @@
     "clipboard-manager:allow-write-text",
     "opener:allow-open-url",
     "opener:allow-reveal-item-in-dir",
+    "notification:default",
     "dialog:allow-open",
     "dialog:allow-message",
     "dialog:allow-ask",

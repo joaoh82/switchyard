@@ -80,6 +80,8 @@ pub const WORKSPACE_LABEL: &str = "workspace";
 /// assigned one), so the session can be resumed or forked later.
 pub const HARNESS_LABEL: &str = "harness";
 pub const HARNESS_SESSION_LABEL: &str = "harnessSession";
+/// Label carrying the id of the session record (see `sessions.rs`) a PTY session belongs to.
+pub const RECORD_LABEL: &str = "record";
 
 /// What the launch environment looks like, for the status bar and for bug reports.
 #[derive(Debug, Clone, Serialize, Type)]
@@ -151,7 +153,45 @@ pub fn spawn_in_workspace(
     resolved
         .labels
         .insert(WORKSPACE_LABEL.to_owned(), workspace_id.to_owned());
-    start(state, resolved, Some(workspace.path), size)
+    // A harness conversation gets a record, so it can be resumed after its process is gone.
+    let record_id = resolved
+        .record
+        .is_some()
+        .then(|| uuid::Uuid::new_v4().to_string());
+    if let Some(id) = &record_id {
+        resolved.labels.insert(RECORD_LABEL.to_owned(), id.clone());
+    }
+    let draft = resolved.record.take();
+    let session = start(state, resolved, Some(workspace.path), size)?;
+    if let (Some(id), Some(draft)) = (record_id, draft) {
+        state.store.add_session(&crate::store::NewSession {
+            id: &id,
+            workspace_id,
+            harness_id: &draft.harness_id,
+            model: draft.model.as_deref(),
+            effort: draft.effort.as_deref(),
+            harness_session_id: draft.harness_session_id.as_deref(),
+            title: &draft.title,
+            forked_from: draft.forked_from.as_deref(),
+            pty_session_id: &session.id.0,
+        })?;
+        settle_record(state, &session);
+    }
+    Ok(session)
+}
+
+/// A program can exit before its record exists, in which case the exit event found nothing to
+/// update. Call this once the record is written to catch up.
+pub fn settle_record(state: &AppState, session: &SessionInfo) {
+    if let Ok(SessionInfo {
+        state: pty_host::SessionState::Exited { exit },
+        ..
+    }) = state.host.info(&session.id)
+    {
+        let _ = state
+            .store
+            .end_session_by_pty(&session.id.0, Some(i64::from(exit.code)));
+    }
 }
 
 /// Spawn a resolved launch and, if its prompt travels over stdin, arrange for the delivery.
@@ -180,6 +220,31 @@ pub struct ResolvedLaunch {
     pub labels: Labels,
     /// A prompt to paste once the program is up, instead of passing it as an argument.
     pub paste_when_ready: Option<PendingPrompt>,
+    /// For a new harness conversation: what to remember about it.
+    pub record: Option<RecordDraft>,
+}
+
+/// What a session record needs beyond the ids chosen at spawn time.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordDraft {
+    pub harness_id: String,
+    pub model: Option<String>,
+    pub effort: Option<String>,
+    pub harness_session_id: Option<String>,
+    pub title: String,
+    pub forked_from: Option<String>,
+}
+
+/// The start of the first message, as a one-line title.
+pub fn title_from_prompt(prompt: Option<&str>) -> String {
+    let line = prompt
+        .and_then(|p| p.lines().map(str::trim).find(|l| !l.is_empty()))
+        .unwrap_or("");
+    let mut title: String = line.chars().take(80).collect();
+    if line.chars().count() > 80 {
+        title.push('…');
+    }
+    title
 }
 
 pub struct PendingPrompt {
@@ -201,12 +266,14 @@ pub fn resolve_launch(launch: Launch, overrides: &[HarnessOverride]) -> IpcResul
             args: vec![],
             labels,
             paste_when_ready: None,
+            record: None,
         },
         Launch::Program { program, args } => ResolvedLaunch {
             program: Some(program),
             args,
             labels,
             paste_when_ready: None,
+            record: None,
         },
         Launch::Harness(request) => {
             let mut def = harness::find(&request.id, overrides).ok_or_else(|| {
@@ -218,16 +285,27 @@ pub fn resolve_launch(launch: Launch, overrides: &[HarnessOverride]) -> IpcResul
             }
             let session_id = (def.session_id_mode == SessionIdMode::Assigned)
                 .then(|| uuid::Uuid::new_v4().to_string());
+            let given = |value: Option<String>| value.filter(|v| !v.trim().is_empty());
+            let (model, effort) = (given(request.model), given(request.effort));
             let args = def.start_args(&LaunchValues {
                 prompt: prompt.clone(),
-                model: request.model,
-                effort: request.effort,
+                model: model.clone(),
+                effort: effort.clone(),
                 session_id: session_id.clone(),
+                new_session_id: None,
             });
             labels.insert(HARNESS_LABEL.to_owned(), def.id.clone());
-            if let Some(session_id) = session_id {
-                labels.insert(HARNESS_SESSION_LABEL.to_owned(), session_id);
+            if let Some(session_id) = &session_id {
+                labels.insert(HARNESS_SESSION_LABEL.to_owned(), session_id.clone());
             }
+            let record = RecordDraft {
+                harness_id: def.id.clone(),
+                model,
+                effort,
+                harness_session_id: session_id,
+                title: title_from_prompt(prompt.as_deref()),
+                forked_from: None,
+            };
             ResolvedLaunch {
                 program: Some(def.command.clone()),
                 args,
@@ -238,6 +316,7 @@ pub fn resolve_launch(launch: Launch, overrides: &[HarnessOverride]) -> IpcResul
                         text,
                         quiet_ms: def.stdin_ready_ms,
                     }),
+                record: Some(record),
             }
         }
     })
