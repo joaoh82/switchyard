@@ -26,21 +26,22 @@ That is exactly the job: fan work out onto parallel branches, then merge it back
 
 ## Developing
 
-Prerequisites: [Rust](https://rustup.rs) (stable), [Bun](https://bun.sh), `git`, and the
+Prerequisites: [Rust](https://rustup.rs) (stable), [Bun](https://bun.sh), `git`,
+[`just`](https://just.systems) (`cargo install just`, or your package manager), and the
 [Tauri system dependencies](https://tauri.app/start/prerequisites/) for your OS.
 
 ```sh
-bun install
-bun tauri dev        # run the app with hot reload
-bun run check        # format check, lint, typecheck, frontend tests
-cargo test           # Rust tests (also regenerates src/lib/bindings.ts)
-bun run lint:windows # clippy for the Windows target, from any OS (rustup target add x86_64-pc-windows-msvc)
-bun tauri build      # produce installers for the current OS
-scripts/bench/run.sh # terminal rendering benchmarks (docs/07-terminal-benchmarks.md)
+just setup      # install dependencies
+just dev        # run the app with hot reload
+just check      # everything CI checks: formatting, lints, types, tests, stale bindings
+just test       # all tests (just test-rust / just test-web for one side)
+just fmt        # format everything
+just build      # installers for this OS, in target/release/bundle/
+just            # list every recipe
 ```
 
 `src/lib/bindings.ts` is generated from the Rust commands by `tauri-specta` — never edit it by hand.
-It is rewritten whenever the app runs in dev or `bun run bindings` is called, and CI fails if the
+It is rewritten whenever the app runs in dev, `cargo test` runs, or `just bindings` is called, and CI fails if the
 checked-in copy is stale.
 
 ## Docs

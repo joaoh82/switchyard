@@ -21,3 +21,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 *.swp
+
+# Downloaded CI artifacts (`just ci-artifacts`)
+artifacts/
