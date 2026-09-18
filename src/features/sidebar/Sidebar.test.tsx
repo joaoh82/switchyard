@@ -258,6 +258,13 @@ describe("Sidebar", () => {
       expect(screen.queryByRole("treeitem", { name: "fix-login" })).not.toBeInTheDocument();
     });
 
+    it("shows an error instead of silently doing nothing when the dialog itself fails", async () => {
+      native.confirm.mockRejectedValue(new Error("dialog.message not allowed"));
+      await openDeleteMenu();
+      expect(await screen.findByRole("alert")).toHaveTextContent("dialog.message not allowed");
+      expect(core.workspaceDelete).not.toHaveBeenCalled();
+    });
+
     it("local has no delete", async () => {
       await renderSidebar("alpha");
       expect(

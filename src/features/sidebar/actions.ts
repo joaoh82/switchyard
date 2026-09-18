@@ -1,7 +1,22 @@
 import { native } from "@/lib/native";
-import type { Project, Workspace } from "@/lib/ipc";
+import { errorMessage, type Project, type Workspace } from "@/lib/ipc";
 import { useProjectsStore } from "@/stores/projects";
 import { useTerminalStore } from "@/stores/terminals";
+
+/**
+ * Run a user-initiated action so that a failure is *seen*. These are fired from click handlers
+ * with nobody awaiting them; without this, a rejected dialog or IPC call would vanish and the
+ * click would simply appear to do nothing.
+ */
+async function visibly<T>(action: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await action();
+  } catch (error) {
+    console.error(error);
+    useProjectsStore.setState({ error: errorMessage(error) });
+    return fallback;
+  }
+}
 
 /**
  * Select a workspace because the user asked for it. A workspace with nothing running gets a
@@ -17,7 +32,10 @@ export function enterWorkspace(workspaceId: string) {
 }
 
 /** Pick a folder and add it, offering to initialise git if it is not a repository yet. */
-export async function openProjectFromDisk(): Promise<boolean> {
+export const openProjectFromDisk = (): Promise<boolean> =>
+  visibly(openProjectFromDiskUnguarded, false);
+
+async function openProjectFromDiskUnguarded(): Promise<boolean> {
   const folder = await native.pickFolder("Open project");
   if (!folder) return false;
 
@@ -38,7 +56,10 @@ export async function openProjectFromDisk(): Promise<boolean> {
   return true;
 }
 
-export async function removeProject(project: Project) {
+export const removeProject = (project: Project): Promise<void> =>
+  visibly(() => removeProjectUnguarded(project), undefined);
+
+async function removeProjectUnguarded(project: Project) {
   const running = useTerminalStore
     .getState()
     .tabs.filter((tab) => !tab.exit && project.workspaces.some((w) => w.id === tab.workspaceId));
@@ -69,7 +90,10 @@ export function composeInCurrentProject() {
  * Delete a worktree workspace: its folder goes, its branch stays. Uncommitted work is never
  * destroyed without a second, explicit confirmation that says so.
  */
-export async function deleteWorkspace(workspace: Workspace) {
+export const deleteWorkspace = (workspace: Workspace): Promise<void> =>
+  visibly(() => deleteWorkspaceUnguarded(workspace), undefined);
+
+async function deleteWorkspaceUnguarded(workspace: Workspace) {
   const branch = workspace.head && !workspace.head.detached ? workspace.head.label : null;
   const agreed = await native.confirm(
     `Delete workspace "${workspace.name}"?\n\nThis removes its folder:\n${workspace.path}\n\n` +
