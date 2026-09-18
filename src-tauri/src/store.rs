@@ -9,7 +9,10 @@ use rusqlite::{params, Connection, OptionalExtension};
 
 /// Applied in order; a database's `user_version` is how many it has had. Never edit a shipped
 /// migration — add a new one.
-const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_init.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/0001_init.sql"),
+    include_str!("../migrations/0002_unique_workspace_path.sql"),
+];
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -192,6 +195,35 @@ impl Store {
             branch: branch.map(str::to_owned),
             base_branch: base_branch.map(str::to_owned),
         })
+    }
+
+    /// Like [`Self::add_worktree`], but a path that is already a workspace is left alone and
+    /// `None` comes back. Adoption uses this: finding a worktree twice must not list it twice.
+    pub fn add_worktree_if_new(
+        &self,
+        project_id: &str,
+        name: &str,
+        path: &str,
+        branch: Option<&str>,
+    ) -> StoreResult<Option<WorkspaceRow>> {
+        let known: bool = self.conn().query_row(
+            "SELECT EXISTS (SELECT 1 FROM workspaces WHERE path = ?)",
+            [path],
+            |row| row.get(0),
+        )?;
+        if known {
+            return Ok(None);
+        }
+        match self.add_worktree(project_id, name, path, branch, None) {
+            Ok(row) => Ok(Some(row)),
+            // Someone else recorded it between our look and our insert: same outcome.
+            Err(StoreError::Sqlite(rusqlite::Error::SqliteFailure(error, _)))
+                if error.code == rusqlite::ErrorCode::ConstraintViolation =>
+            {
+                Ok(None)
+            }
+            Err(other) => Err(other),
+        }
     }
 
     /// Forget a worktree workspace. `local` rows cannot be removed this way.
@@ -393,6 +425,59 @@ mod tests {
         assert_eq!(
             store.workspace(&theirs.id).unwrap().unwrap().base_branch,
             None
+        );
+    }
+
+    #[test]
+    fn a_folder_can_only_be_one_workspace() {
+        let store = Store::in_memory();
+        let project = store.add_project("app", "/code/app").unwrap();
+        let first = store
+            .add_worktree_if_new(&project.id, "wt", "/wt/x", Some("b"))
+            .unwrap();
+        assert!(first.is_some());
+        assert_eq!(
+            store
+                .add_worktree_if_new(&project.id, "wt", "/wt/x", Some("b"))
+                .unwrap(),
+            None
+        );
+        assert!(store
+            .add_worktree(&project.id, "again", "/wt/x", Some("b"), None)
+            .is_err());
+        assert_eq!(store.workspaces().unwrap().len(), 2, "local + one worktree");
+    }
+
+    #[test]
+    fn upgrading_removes_duplicate_workspaces_left_by_the_adoption_race() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("switchyard.db");
+        {
+            // A database as version 1 left it: the same worktree recorded twice.
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(MIGRATIONS[0]).unwrap();
+            conn.pragma_update(None, "user_version", 1).unwrap();
+            conn.execute_batch(
+                "INSERT INTO projects VALUES ('p', 'app', '/code/app', 0, 0);
+                 INSERT INTO workspaces (id, project_id, kind, name, path, created_at) VALUES
+                   ('l', 'p', 'local', 'local', '/code/app', 0),
+                   ('a', 'p', 'worktree', 'by-hand', '/wt/by-hand', 1),
+                   ('b', 'p', 'worktree', 'by-hand', '/wt/by-hand', 2),
+                   ('c', 'p', 'worktree', 'other', '/wt/other', 3);",
+            )
+            .unwrap();
+        }
+        let store = Store::open(&path).unwrap();
+        let ids: Vec<_> = store
+            .workspaces()
+            .unwrap()
+            .into_iter()
+            .map(|w| w.id)
+            .collect();
+        assert_eq!(
+            ids,
+            ["l", "a", "c"],
+            "the older of the two duplicates is kept"
         );
     }
 

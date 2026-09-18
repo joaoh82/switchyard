@@ -248,14 +248,13 @@ pub fn adopt_unknown(store: &Store, git: &Git, project_id: &str) -> IpcResult<us
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| entry.path.to_string_lossy().into_owned());
-        store.add_worktree(
+        let recorded = store.add_worktree_if_new(
             &project.id,
             &name,
             &entry.path.to_string_lossy(),
             entry.branch.as_deref(),
-            None,
         )?;
-        adopted += 1;
+        adopted += usize::from(recorded.is_some());
     }
     Ok(adopted)
 }
@@ -533,6 +532,31 @@ mod tests {
             "idempotent"
         );
         assert!(PathBuf::from(&ours.path).is_dir());
+    }
+
+    #[test]
+    fn overlapping_adoption_runs_list_a_worktree_once() {
+        let fx = Fixture::new();
+        fx.git
+            .worktree_add(
+                &fx.repo,
+                &fx.worktrees.join("by-hand"),
+                "experiment",
+                "HEAD",
+            )
+            .unwrap();
+
+        // The project list loads from several places at once (startup, window focus), and every
+        // load adopts. Run many in parallel, as the app does.
+        let adopted: usize = std::thread::scope(|scope| {
+            let runs: Vec<_> = (0..8)
+                .map(|_| scope.spawn(|| adopt_unknown(&fx.store, &fx.git, &fx.project_id).unwrap()))
+                .collect();
+            runs.into_iter().map(|run| run.join().unwrap()).sum()
+        });
+
+        assert_eq!(adopted, 1);
+        assert_eq!(fx.names(), ["local", "by-hand"]);
     }
 
     #[test]

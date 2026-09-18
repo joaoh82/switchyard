@@ -11,6 +11,8 @@ use crate::store::Store;
 pub struct AppState {
     pub host: PtyHost,
     pub store: Store,
+    /// Held while catching up with git, so overlapping project listings reconcile one at a time.
+    pub reconciling: Mutex<()>,
     env: Mutex<Option<Arc<ShellEnv>>>,
 }
 
@@ -19,6 +21,7 @@ impl AppState {
         Self {
             host,
             store,
+            reconciling: Mutex::new(()),
             env: Mutex::new(None),
         }
     }

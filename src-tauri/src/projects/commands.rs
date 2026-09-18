@@ -17,6 +17,10 @@ fn with_projects<T>(
     let git = Git::new(&state.env())?;
     // Catch up with git first: worktrees made by hand, or orphaned when their project was
     // removed and added again, become workspaces. Failing to look must not block the list.
+    let _one_at_a_time = state
+        .reconciling
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     for project in state.store.projects()? {
         if let Err(error) = crate::workspaces::adopt_unknown(&state.store, &git, &project.id) {
             eprintln!(
