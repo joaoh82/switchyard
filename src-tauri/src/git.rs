@@ -18,6 +18,19 @@ pub enum GitError {
 
 pub type GitResult<T> = Result<T, GitError>;
 
+/// One entry of `git worktree list`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorktreeEntry {
+    pub path: PathBuf,
+    /// `None` when detached (or bare).
+    pub branch: Option<String>,
+    /// The repository's own checkout, as opposed to a linked worktree.
+    pub is_main: bool,
+    pub bare: bool,
+    /// Git considers it stale: its folder is gone.
+    pub prunable: bool,
+}
+
 /// What `HEAD` points at.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Head {
@@ -179,6 +192,20 @@ impl Git {
             .map(drop)
     }
 
+    /// Check out the *existing* `branch` in a new worktree at `path`. Git refuses if the branch
+    /// is already checked out somewhere else.
+    pub fn worktree_add_existing(&self, root: &Path, path: &Path, branch: &str) -> GitResult<()> {
+        let path = path.to_string_lossy();
+        self.run(root, &["worktree", "add", &path, branch])
+            .map(drop)
+    }
+
+    /// Every worktree git knows for this repository, the main checkout first.
+    pub fn worktrees(&self, root: &Path) -> GitResult<Vec<WorktreeEntry>> {
+        let out = self.run(root, &["worktree", "list", "--porcelain"])?;
+        Ok(parse_worktrees(&out))
+    }
+
     /// Remove a worktree. Without `force`, git refuses if it holds modified or untracked files.
     pub fn worktree_remove(&self, root: &Path, path: &Path, force: bool) -> GitResult<()> {
         let path = path.to_string_lossy();
@@ -198,6 +225,34 @@ impl Git {
     pub fn branch_delete(&self, root: &Path, branch: &str) -> GitResult<()> {
         self.run(root, &["branch", "-D", branch]).map(drop)
     }
+}
+
+fn parse_worktrees(porcelain: &str) -> Vec<WorktreeEntry> {
+    let mut entries: Vec<WorktreeEntry> = Vec::new();
+    for line in porcelain.lines() {
+        let (key, value) = line.split_once(' ').unwrap_or((line, ""));
+        match (key, entries.last_mut()) {
+            ("worktree", _) => entries.push(WorktreeEntry {
+                path: normalize(Path::new(value)),
+                branch: None,
+                is_main: entries.is_empty(),
+                bare: false,
+                prunable: false,
+            }),
+            ("branch", Some(entry)) => {
+                entry.branch = Some(
+                    value
+                        .strip_prefix("refs/heads/")
+                        .unwrap_or(value)
+                        .to_owned(),
+                );
+            }
+            ("bare", Some(entry)) => entry.bare = true,
+            ("prunable", Some(entry)) => entry.prunable = true,
+            _ => {}
+        }
+    }
+    entries
 }
 
 /// Canonical form of a path for storing and comparing: symlinks resolved, and on Windows no
@@ -302,6 +357,42 @@ mod tests {
         );
         git.branch_delete(repo.path(), "sy/feature").unwrap();
         assert!(!git.branch_exists(repo.path(), "sy/feature").unwrap());
+    }
+
+    #[test]
+    fn worktrees_are_listed_with_their_branches_main_first() {
+        let (git, repo) = repo_with_commit();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let (a, b) = (elsewhere.path().join("a"), elsewhere.path().join("b"));
+        git.worktree_add(repo.path(), &a, "sy/a", "trunk").unwrap();
+        git.worktree_add(repo.path(), &b, "sy/b", "trunk").unwrap();
+        git.run(&b, &["checkout", "--detach"]).unwrap();
+        std::fs::remove_dir_all(&a).unwrap();
+
+        let list = git.worktrees(repo.path()).unwrap();
+        assert_eq!(list.len(), 3);
+        assert!(list[0].is_main && list[0].branch.as_deref() == Some("trunk"));
+        assert_eq!(list[0].path, normalize(repo.path()));
+        assert!(list[1].prunable && list[1].branch.as_deref() == Some("sy/a"));
+        assert!(!list[2].prunable && !list[2].is_main && list[2].branch.is_none());
+        assert_eq!(list[2].path, normalize(&b));
+    }
+
+    #[test]
+    fn an_existing_branch_can_be_checked_out_in_a_worktree_but_only_once() {
+        let (git, repo) = repo_with_commit();
+        let elsewhere = tempfile::tempdir().unwrap();
+        git.run(repo.path(), &["branch", "feature"]).unwrap();
+
+        git.worktree_add_existing(repo.path(), &elsewhere.path().join("one"), "feature")
+            .unwrap();
+        assert_eq!(
+            git.head(&elsewhere.path().join("one")).unwrap(),
+            Head::Branch("feature".into())
+        );
+        assert!(git
+            .worktree_add_existing(repo.path(), &elsewhere.path().join("two"), "feature")
+            .is_err());
     }
 
     #[test]

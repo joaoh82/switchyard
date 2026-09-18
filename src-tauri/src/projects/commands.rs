@@ -15,6 +15,16 @@ fn with_projects<T>(
     f: impl FnOnce(&Projects<'_>) -> IpcResult<T>,
 ) -> IpcResult<T> {
     let git = Git::new(&state.env())?;
+    // Catch up with git first: worktrees made by hand, or orphaned when their project was
+    // removed and added again, become workspaces. Failing to look must not block the list.
+    for project in state.store.projects()? {
+        if let Err(error) = crate::workspaces::adopt_unknown(&state.store, &git, &project.id) {
+            eprintln!(
+                "could not reconcile worktrees of {}: {}",
+                project.name, error.message
+            );
+        }
+    }
     f(&Projects {
         store: &state.store,
         git: &git,

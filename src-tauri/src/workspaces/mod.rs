@@ -9,8 +9,8 @@ mod naming;
 use std::path::{Path, PathBuf};
 
 use crate::error::{IpcError, IpcResult};
-use crate::git::{Git, GitError};
-use crate::store::{Store, WorkspaceRow};
+use crate::git::{normalize, Git, GitError};
+use crate::store::{ProjectRow, Store, WorkspaceRow};
 
 /// Prefix of the branches Switchyard creates: `sy/fix-login-bug`.
 pub const BRANCH_PREFIX: &str = "sy";
@@ -32,23 +32,7 @@ impl Workspaces<'_> {
         base: Option<&str>,
         prompt: &str,
     ) -> IpcResult<WorkspaceRow> {
-        let project = self
-            .store
-            .project(project_id)?
-            .ok_or_else(|| IpcError::new("unknown_project", "That project no longer exists."))?;
-        let root = PathBuf::from(&project.root_path);
-        if !root.is_dir() {
-            return Err(IpcError::new(
-                "project_missing",
-                format!("{} does not exist any more.", project.root_path),
-            ));
-        }
-        if !self.git.has_commits(&root)? {
-            return Err(IpcError::new(
-                "no_commits",
-                "This repository has no commits yet, so there is nothing to branch from. Make a first commit, then try again.",
-            ));
-        }
+        let (project, root) = self.usable_project(project_id)?;
         let base = match base {
             Some(base) => base.to_owned(),
             None => self.git.default_branch(&root)?.ok_or_else(|| {
@@ -59,9 +43,7 @@ impl Workspaces<'_> {
             })?,
         };
 
-        let project_dir = self
-            .worktree_root
-            .join(naming::slugify_name(&project.name).unwrap_or_else(|| project.id.clone()));
+        let project_dir = self.project_dir(&project);
         let seed = self.store.workspaces()?.len();
         // A name is free only if neither its branch nor its folder exists — including leftovers
         // Switchyard does not know about.
@@ -82,34 +64,106 @@ impl Workspaces<'_> {
 
         let branch = branch_for(&name);
         let path = project_dir.join(&name);
-        std::fs::create_dir_all(&project_dir).map_err(|e| {
-            IpcError::new(
-                "io",
-                format!("Cannot create {}: {e}", project_dir.display()),
-            )
-        })?;
+        self.ensure_dir(&project_dir)?;
         self.git.worktree_add(&root, &path, &branch, &base)?;
+        self.record(&project, &root, &name, &path, &branch, Some(&base))
+    }
 
-        match self
+    /// Open an *existing* branch as a workspace: a worktree for it, no new branch. This is how a
+    /// branch kept by an earlier delete comes back. Git refuses a branch that is already checked
+    /// out somewhere, which is exactly the rule we want.
+    pub fn open_branch(&self, project_id: &str, branch: &str) -> IpcResult<WorkspaceRow> {
+        let (project, root) = self.usable_project(project_id)?;
+        if !self.git.branch_exists(&root, branch)? {
+            return Err(IpcError::new(
+                "unknown_branch",
+                format!("There is no branch \"{branch}\"."),
+            ));
+        }
+        let project_dir = self.project_dir(&project);
+        // `sy/fix-login` comes back as `fix-login`; other branches are named after themselves.
+        let own = branch
+            .strip_prefix(&format!("{BRANCH_PREFIX}/"))
+            .unwrap_or(branch);
+        let base = naming::slugify_name(own).unwrap_or_else(|| naming::base_name("", 0));
+        let name = naming::unique(&base, |candidate| project_dir.join(candidate).exists());
+
+        let path = project_dir.join(&name);
+        self.ensure_dir(&project_dir)?;
+        self.git.worktree_add_existing(&root, &path, branch)?;
+        self.record(&project, &root, &name, &path, branch, None)
+    }
+
+    fn usable_project(&self, project_id: &str) -> IpcResult<(ProjectRow, PathBuf)> {
+        let project = self
             .store
-            .add_worktree(&project.id, &name, &path.to_string_lossy(), &branch, &base)
-        {
+            .project(project_id)?
+            .ok_or_else(|| IpcError::new("unknown_project", "That project no longer exists."))?;
+        let root = PathBuf::from(&project.root_path);
+        if !root.is_dir() {
+            return Err(IpcError::new(
+                "project_missing",
+                format!("{} does not exist any more.", project.root_path),
+            ));
+        }
+        if !self.git.has_commits(&root)? {
+            return Err(IpcError::new(
+                "no_commits",
+                "This repository has no commits yet, so there is nothing to branch from. Make a first commit, then try again.",
+            ));
+        }
+        Ok((project, root))
+    }
+
+    fn project_dir(&self, project: &ProjectRow) -> PathBuf {
+        self.worktree_root
+            .join(naming::slugify_name(&project.name).unwrap_or_else(|| project.id.clone()))
+    }
+
+    fn ensure_dir(&self, dir: &Path) -> IpcResult<()> {
+        std::fs::create_dir_all(dir)
+            .map_err(|e| IpcError::new("io", format!("Cannot create {}: {e}", dir.display())))
+    }
+
+    /// Store a freshly added worktree. `base` is `Some` only when we created the branch.
+    fn record(
+        &self,
+        project: &ProjectRow,
+        root: &Path,
+        name: &str,
+        path: &Path,
+        branch: &str,
+        base: Option<&str>,
+    ) -> IpcResult<WorkspaceRow> {
+        // Store the path the way git reports it (symlinks resolved — `/tmp` is `/private/tmp` on
+        // macOS), or adoption would later mistake this worktree for an unknown one.
+        let stored = normalize(path);
+        match self.store.add_worktree(
+            &project.id,
+            name,
+            &stored.to_string_lossy(),
+            Some(branch),
+            base,
+        ) {
             Ok(row) => Ok(row),
             Err(error) => {
-                self.undo(&root, &path, &branch);
+                self.undo(root, path, base.is_some().then_some(branch));
                 Err(error.into())
             }
         }
     }
 
     /// Undo a workspace that was created a moment ago and never used, e.g. because its harness
-    /// failed to start. The branch goes too: it has no commits of its own yet.
+    /// failed to start. A branch we created goes too — it has no commits of its own yet. A
+    /// branch that existed before is never touched.
     pub fn discard(&self, workspace: &WorkspaceRow) -> IpcResult<()> {
         let root = self.project_root(workspace)?;
         self.store.remove_worktree(&workspace.id)?;
-        if let Some(branch) = &workspace.branch {
-            self.undo(&root, Path::new(&workspace.path), branch);
-        }
+        let created_branch = workspace
+            .base_branch
+            .as_ref()
+            .and(workspace.branch.as_deref());
+        self.undo(&root, Path::new(&workspace.path), created_branch);
         Ok(())
     }
 
@@ -158,11 +212,52 @@ impl Workspaces<'_> {
             .ok_or_else(|| IpcError::new("unknown_project", "That project no longer exists."))
     }
 
-    fn undo(&self, root: &Path, path: &Path, branch: &str) {
+    /// Take back a worktree, and the branch too if (and only if) we created it.
+    fn undo(&self, root: &Path, path: &Path, created_branch: Option<&str>) {
         let _ = self.git.worktree_remove(root, path, true);
         let _ = self.git.worktree_prune(root);
-        let _ = self.git.branch_delete(root, branch);
+        if let Some(branch) = created_branch {
+            let _ = self.git.branch_delete(root, branch);
+        }
     }
+}
+
+/// Adopt worktrees git knows about but Switchyard does not — made by hand, or orphaned when
+/// their project was removed and added again. Returns how many were adopted.
+pub fn adopt_unknown(store: &Store, git: &Git, project_id: &str) -> IpcResult<usize> {
+    let Some(project) = store.project(project_id)? else {
+        return Ok(0);
+    };
+    let root = PathBuf::from(&project.root_path);
+    if !root.is_dir() {
+        return Ok(0);
+    }
+    let known: Vec<PathBuf> = store
+        .workspaces()?
+        .iter()
+        .map(|w| normalize(Path::new(&w.path)))
+        .collect();
+
+    let mut adopted = 0;
+    for entry in git.worktrees(&root)? {
+        if entry.is_main || entry.bare || entry.prunable || known.contains(&entry.path) {
+            continue;
+        }
+        let name = entry
+            .path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| entry.path.to_string_lossy().into_owned());
+        store.add_worktree(
+            &project.id,
+            &name,
+            &entry.path.to_string_lossy(),
+            entry.branch.as_deref(),
+            None,
+        )?;
+        adopted += 1;
+    }
+    Ok(adopted)
 }
 
 fn branch_for(name: &str) -> String {
@@ -173,7 +268,7 @@ fn branch_for(name: &str) -> String {
 mod tests {
     use super::*;
     use crate::git::testing::git;
-    use crate::git::{normalize, Head};
+    use crate::git::Head;
     use crate::projects::Projects;
 
     struct Fixture {
@@ -336,6 +431,129 @@ mod tests {
         assert!(!PathBuf::from(&ws.path).exists());
         assert!(!fx.git.branch_exists(&fx.repo, "sy/doomed").unwrap());
         assert_eq!(fx.names(), ["local"]);
+    }
+
+    #[test]
+    fn a_kept_branch_comes_back_as_a_workspace_with_its_work() {
+        let fx = Fixture::new();
+        let ws = fx
+            .workspaces()
+            .create(&fx.project_id, None, "write the docs")
+            .unwrap();
+        let path = PathBuf::from(&ws.path);
+        std::fs::write(path.join("DOCS.md"), "hello").unwrap();
+        fx.git.run(&path, &["add", "."]).unwrap();
+        fx.git.run(&path, &["commit", "-qm", "docs"]).unwrap();
+        fx.workspaces().delete(&ws.id, false).unwrap();
+        assert_eq!(fx.names(), ["local"]);
+
+        let back = fx
+            .workspaces()
+            .open_branch(&fx.project_id, "sy/write-docs")
+            .unwrap();
+
+        assert_eq!(back.name, "write-docs");
+        assert_eq!(back.branch.as_deref(), Some("sy/write-docs"));
+        assert_eq!(back.base_branch, None, "we did not create this branch");
+        assert!(
+            PathBuf::from(&back.path).join("DOCS.md").exists(),
+            "the commit is there"
+        );
+    }
+
+    #[test]
+    fn opening_a_branch_never_puts_the_branch_at_risk() {
+        let fx = Fixture::new();
+        fx.git.run(&fx.repo, &["branch", "feature/Big Thing"]).ok();
+        fx.git.run(&fx.repo, &["branch", "release"]).unwrap();
+
+        let ws = fx
+            .workspaces()
+            .open_branch(&fx.project_id, "release")
+            .unwrap();
+        assert_eq!(ws.name, "release");
+        // Discarding (the harness failed to start) takes back the folder, not the branch.
+        fx.workspaces().discard(&ws).unwrap();
+        assert!(!PathBuf::from(&ws.path).exists());
+        assert!(fx.git.branch_exists(&fx.repo, "release").unwrap());
+
+        let err = fx
+            .workspaces()
+            .open_branch(&fx.project_id, "nope")
+            .unwrap_err();
+        assert_eq!(err.code, "unknown_branch");
+    }
+
+    #[test]
+    fn a_branch_already_checked_out_is_refused_and_leaves_nothing_behind() {
+        let fx = Fixture::new();
+        let ws = fx
+            .workspaces()
+            .create(&fx.project_id, None, "busy")
+            .unwrap();
+        let err = fx
+            .workspaces()
+            .open_branch(&fx.project_id, "sy/busy")
+            .unwrap_err();
+        assert_eq!(err.code, "git_failed");
+        assert_eq!(fx.names(), ["local", "busy"]);
+        assert!(PathBuf::from(&ws.path).is_dir());
+    }
+
+    #[test]
+    fn worktrees_switchyard_does_not_know_are_adopted_once() {
+        let fx = Fixture::new();
+        let ours = fx
+            .workspaces()
+            .create(&fx.project_id, None, "known")
+            .unwrap();
+        let by_hand = fx.worktrees.join("made-by-hand");
+        fx.git
+            .worktree_add(&fx.repo, &by_hand, "experiment", "HEAD")
+            .unwrap();
+        let stale = fx.worktrees.join("stale");
+        fx.git
+            .worktree_add(&fx.repo, &stale, "old", "HEAD")
+            .unwrap();
+        std::fs::remove_dir_all(&stale).unwrap();
+
+        assert_eq!(
+            adopt_unknown(&fx.store, &fx.git, &fx.project_id).unwrap(),
+            1
+        );
+        assert_eq!(fx.names(), ["local", "known", "made-by-hand"]);
+        let adopted = fx.store.workspaces().unwrap().pop().unwrap();
+        assert_eq!(adopted.branch.as_deref(), Some("experiment"));
+        assert_eq!(PathBuf::from(&adopted.path), by_hand);
+        assert_eq!(adopted.base_branch, None);
+
+        assert_eq!(
+            adopt_unknown(&fx.store, &fx.git, &fx.project_id).unwrap(),
+            0,
+            "idempotent"
+        );
+        assert!(PathBuf::from(&ours.path).is_dir());
+    }
+
+    #[test]
+    fn removing_and_re_adding_a_project_brings_its_workspaces_back() {
+        let fx = Fixture::new();
+        fx.workspaces()
+            .create(&fx.project_id, None, "survivor")
+            .unwrap();
+        fx.store.remove_project(&fx.project_id).unwrap();
+
+        let again = Projects {
+            store: &fx.store,
+            git: &fx.git,
+        }
+        .open(&fx.repo, false)
+        .unwrap();
+        assert_eq!(
+            adopt_unknown(&fx.store, &fx.git, &again.project.id).unwrap(),
+            1
+        );
+        assert_eq!(fx.names(), ["local", "survivor"]);
     }
 
     #[test]

@@ -61,6 +61,16 @@ confirmation. Rename, archive and "delete the branch too" remain in M6. Harness 
 labelled in the PTY host with their harness and (where we assign one) the harness's own session id,
 ready for M6's resume and fork.
 
+Two follow-ups landed right after M3, from dogfooding:
+
+- **Open an existing branch.** The composer's branch picker has two groups: _New branch from…_ and
+  _Open existing branch_ (only branches nobody has checked out — git allows a branch in one worktree
+  at a time). This is how a branch kept by a delete comes back as a workspace. Switchyard never
+  deletes a branch it did not create, not even when undoing a failed start.
+- **Adoption.** Whenever projects are listed, worktrees git knows about but Switchyard does not
+  become workspaces — ones made by hand, and ones orphaned when their project was removed and added
+  again. Stale ("prunable") entries are skipped. This brought forward part of M6's reconciliation.
+
 ## M4 — Harness settings
 
 - Settings file + override model. Settings → Harnesses form, argv preview, PATH detection,
@@ -84,7 +94,8 @@ large repo (test against one with a big `node_modules`).
   is first opened, not all at once).
 - Status dots from PTY activity; desktop notification when a busy agent goes quiet.
 - Shell tabs alongside harness tabs. Rename / archive / delete workspace with safety prompts.
-- Worktree reconciliation on startup.
+- Worktree reconciliation on startup (adoption of unknown worktrees is done; still to do: offer to
+  clean up rows whose worktree git has forgotten).
 
 _Exit:_ quit mid-task, relaunch, and be back in the same conversations within a couple of clicks.
 

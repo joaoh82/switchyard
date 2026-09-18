@@ -31,6 +31,9 @@ pub struct BranchList {
     pub branches: Vec<String>,
     /// The branch to offer first: the remote's default, or the one checked out.
     pub default: Option<String>,
+    /// Branches checked out in some worktree already. Git allows a branch in one place only, so
+    /// these cannot be opened as a workspace.
+    pub checked_out: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Type)]
@@ -39,6 +42,8 @@ pub struct NewWorkspace {
     pub project_id: String,
     /// `None` starts from the project's default branch.
     pub base_branch: Option<String>,
+    /// Open this existing branch instead of creating a new one; `base_branch` is then ignored.
+    pub existing_branch: Option<String>,
     pub harness: HarnessRequest,
     pub size: TermSize,
 }
@@ -95,12 +100,18 @@ pub async fn project_branches(app: AppHandle, project_id: String) -> IpcResult<B
         Ok(BranchList {
             branches: git.branches(&root)?,
             default: git.default_branch(&root)?,
+            checked_out: git
+                .worktrees(&root)?
+                .into_iter()
+                .filter(|entry| !entry.prunable)
+                .filter_map(|entry| entry.branch)
+                .collect(),
         })
     })
     .await
 }
 
-/// The core loop: make a worktree on a new branch and start a harness in it with the user's
+/// The core loop: make a worktree — on a new branch, or for an existing one — and start a harness in it with the user's
 /// first message. If the harness cannot start, the worktree and branch are taken back, so a
 /// failed attempt leaves no trace.
 #[tauri::command]
@@ -122,8 +133,12 @@ pub async fn workspace_create(
             worktree_root: &root,
         };
         let prompt = request.harness.prompt.clone().unwrap_or_default();
-        let row =
-            workspaces.create(&request.project_id, request.base_branch.as_deref(), &prompt)?;
+        let row = match request.existing_branch.as_deref() {
+            Some(branch) => workspaces.open_branch(&request.project_id, branch)?,
+            None => {
+                workspaces.create(&request.project_id, request.base_branch.as_deref(), &prompt)?
+            }
+        };
 
         match spawn_in_workspace(
             state,

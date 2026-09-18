@@ -38,6 +38,10 @@ pub struct WorkspaceRow {
     pub name: String,
     pub path: String,
     pub branch: Option<String>,
+    /// The branch this workspace's branch was created from. `None` when Switchyard did not
+    /// create the branch (an existing branch was opened, or a worktree was adopted) — which also
+    /// means the branch is not ours to delete when undoing.
+    pub base_branch: Option<String>,
 }
 
 pub struct Store {
@@ -136,7 +140,7 @@ impl Store {
     pub fn workspaces(&self) -> StoreResult<Vec<WorkspaceRow>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT id, project_id, kind, name, path, branch FROM workspaces
+            "SELECT id, project_id, kind, name, path, branch, base_branch FROM workspaces
              WHERE status = 'active'
              ORDER BY project_id, kind = 'local' DESC, sort_order, created_at",
         )?;
@@ -148,7 +152,7 @@ impl Store {
         Ok(self
             .conn()
             .query_row(
-                "SELECT id, project_id, kind, name, path, branch FROM workspaces WHERE id = ?",
+                "SELECT id, project_id, kind, name, path, branch, base_branch FROM workspaces WHERE id = ?",
                 [id],
                 workspace_from_row,
             )
@@ -168,8 +172,8 @@ impl Store {
         project_id: &str,
         name: &str,
         path: &str,
-        branch: &str,
-        base_branch: &str,
+        branch: Option<&str>,
+        base_branch: Option<&str>,
     ) -> StoreResult<WorkspaceRow> {
         let conn = self.conn();
         let id = new_id();
@@ -185,7 +189,8 @@ impl Store {
             kind: "worktree".to_owned(),
             name: name.to_owned(),
             path: path.to_owned(),
-            branch: Some(branch.to_owned()),
+            branch: branch.map(str::to_owned),
+            base_branch: base_branch.map(str::to_owned),
         })
     }
 
@@ -250,6 +255,7 @@ fn workspace_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRow>
         name: row.get(3)?,
         path: row.get(4)?,
         branch: row.get(5)?,
+        base_branch: row.get(6)?,
     })
 }
 
@@ -341,10 +347,10 @@ mod tests {
         let store = Store::in_memory();
         let project = store.add_project("app", "/code/app").unwrap();
         let first = store
-            .add_worktree(&project.id, "one", "/wt/one", "sy/one", "main")
+            .add_worktree(&project.id, "one", "/wt/one", Some("sy/one"), Some("main"))
             .unwrap();
         store
-            .add_worktree(&project.id, "two", "/wt/two", "sy/two", "main")
+            .add_worktree(&project.id, "two", "/wt/two", Some("sy/two"), Some("main"))
             .unwrap();
 
         let names: Vec<_> = store
@@ -363,6 +369,31 @@ mod tests {
         assert!(store.remove_worktree(&first.id).unwrap());
         assert_eq!(store.workspaces().unwrap().len(), 2);
         assert_eq!(store.project(&project.id).unwrap().unwrap().name, "app");
+    }
+
+    #[test]
+    fn a_worktree_remembers_whether_switchyard_created_its_branch() {
+        let store = Store::in_memory();
+        let project = store.add_project("app", "/code/app").unwrap();
+        let ours = store
+            .add_worktree(&project.id, "a", "/wt/a", Some("sy/a"), Some("main"))
+            .unwrap();
+        let theirs = store
+            .add_worktree(&project.id, "b", "/wt/b", Some("feature"), None)
+            .unwrap();
+        assert_eq!(
+            store
+                .workspace(&ours.id)
+                .unwrap()
+                .unwrap()
+                .base_branch
+                .as_deref(),
+            Some("main")
+        );
+        assert_eq!(
+            store.workspace(&theirs.id).unwrap().unwrap().base_branch,
+            None
+        );
     }
 
     #[test]

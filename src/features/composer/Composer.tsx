@@ -31,6 +31,7 @@ export function Composer({ project }: { project: Project }) {
   const [model, setModel] = useState(last.model ?? "");
   const [effort, setEffort] = useState(last.effort ?? "");
   const [branches, setBranches] = useState<BranchList | null>(null);
+  // "new:<branch>" starts a new branch from <branch>; "open:<branch>" opens <branch> itself.
   const [base, setBase] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +47,8 @@ export function Composer({ project }: { project: Project }) {
       (list) => {
         if (stale) return;
         setBranches(list);
-        setBase(list.default ?? list.branches[0] ?? "");
+        const start = list.default ?? list.branches[0];
+        setBase(start ? `new:${start}` : "");
       },
       (reason) => !stale && setError(reason?.message ?? String(reason)),
     );
@@ -71,6 +73,9 @@ export function Composer({ project }: { project: Project }) {
   };
 
   const ready = !busy && !!harness?.resolvedPath && base !== "";
+  const [mode, branch] = [base.slice(0, base.indexOf(":")), base.slice(base.indexOf(":") + 1)];
+  // A branch lives in one worktree at a time, so only branches nobody has checked out can open.
+  const openable = branches?.branches.filter((name) => !branches.checkedOut.includes(name)) ?? [];
 
   const start = async () => {
     if (!ready || !harness) return;
@@ -79,7 +84,8 @@ export function Composer({ project }: { project: Project }) {
     const projects = useProjectsStore.getState();
     const result = await projects.createWorkspace({
       projectId: project.id,
-      baseBranch: base,
+      baseBranch: mode === "new" ? branch : null,
+      existingBranch: mode === "open" ? branch : null,
       harness: {
         id: harness.id,
         model: model.trim() || null,
@@ -181,22 +187,31 @@ export function Composer({ project }: { project: Project }) {
             </select>
           )}
 
-          <label className="ml-auto flex items-center gap-2 text-ink-faint">
-            from
-            <select
-              aria-label="Base branch"
-              value={base}
-              disabled={busy || !branches}
-              onChange={(event) => setBase(event.target.value)}
-              className={`${control} max-w-44 font-mono text-[12px]`}
-            >
+          <select
+            aria-label="Branch"
+            title="Start a new branch from one of these, or open a branch that already exists"
+            value={base}
+            disabled={busy || !branches}
+            onChange={(event) => setBase(event.target.value)}
+            className={`${control} ml-auto max-w-56 font-mono text-[12px]`}
+          >
+            <optgroup label="New branch from">
               {branches?.branches.map((name) => (
-                <option key={name} value={name}>
+                <option key={name} value={`new:${name}`}>
                   {name}
                 </option>
               ))}
-            </select>
-          </label>
+            </optgroup>
+            {openable.length > 0 && (
+              <optgroup label="Open existing branch">
+                {openable.map((name) => (
+                  <option key={name} value={`open:${name}`}>
+                    {name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
 
           <button
             type="submit"
@@ -220,7 +235,10 @@ export function Composer({ project }: { project: Project }) {
           ) : (
             <p className="text-ink-faint">
               Enter to start · Shift+Enter for a new line · Esc to cancel · {formatShortcut("N")}{" "}
-              opens this again. A new branch and git worktree are created when you start.
+              opens this again.{" "}
+              {mode === "open"
+                ? `Opens the existing branch "${branch}" in a new git worktree.`
+                : "A new branch and git worktree are created when you start."}
             </p>
           )}
         </div>

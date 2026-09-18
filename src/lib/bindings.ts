@@ -22,7 +22,7 @@ export const commands = {
 	harnessesList: () => typedError<HarnessInfo[], IpcError>(__TAURI_INVOKE("harnesses_list")),
 	projectBranches: (projectId: string) => typedError<BranchList, IpcError>(__TAURI_INVOKE("project_branches", { projectId })),
 	/**
-	 *  The core loop: make a worktree on a new branch and start a harness in it with the user's
+	 *  The core loop: make a worktree — on a new branch, or for an existing one — and start a harness in it with the user's
 	 *  first message. If the harness cannot start, the worktree and branch are taken back, so a
 	 *  failed attempt leaves no trace.
 	 */
@@ -71,6 +71,11 @@ export type BranchList = {
 	branches: string[],
 	/**  The branch to offer first: the remote's default, or the one checked out. */
 	default: string | null,
+	/**
+	 *  Branches checked out in some worktree already. Git allows a branch in one place only, so
+	 *  these cannot be opened as a workspace.
+	 */
+	checkedOut: string[],
 };
 
 export type CreatedWorkspace = {
@@ -176,6 +181,8 @@ export type NewWorkspace = {
 	projectId: string,
 	/**  `None` starts from the project's default branch. */
 	baseBranch: string | null,
+	/**  Open this existing branch instead of creating a new one; `base_branch` is then ignored. */
+	existingBranch: string | null,
 	harness: HarnessRequest,
 	size: TermSize,
 };

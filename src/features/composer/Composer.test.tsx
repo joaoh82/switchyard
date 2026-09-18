@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HarnessInfo } from "@/lib/ipc";
@@ -55,7 +55,7 @@ const app = project("app");
 
 async function renderComposer() {
   render(<Composer project={app} />);
-  await screen.findByRole("option", { name: "main" });
+  await screen.findAllByRole("option", { name: "main" });
   return userEvent.setup();
 }
 
@@ -63,7 +63,11 @@ describe("Composer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     core.uiStateSave.mockResolvedValue(undefined);
-    core.projectBranches.mockResolvedValue({ branches: ["develop", "main"], default: "main" });
+    core.projectBranches.mockResolvedValue({
+      branches: ["develop", "main", "sy/kept-earlier", "sy/in-use"],
+      default: "main",
+      checkedOut: ["main", "sy/in-use"],
+    });
     core.harnessesList.mockResolvedValue([
       harness("claude", { efforts: ["low", "high"], models: ["opus", "sonnet"] }),
       harness("codex", { efforts: ["low", "medium"] }),
@@ -90,6 +94,7 @@ describe("Composer", () => {
     expect(core.workspaceCreate).toHaveBeenCalledWith({
       projectId: "p-app",
       baseBranch: "main",
+      existingBranch: null,
       harness: { id: "claude", model: null, effort: null, prompt: "Fix the login bug" },
       size: { cols: 100, rows: 30 },
     });
@@ -108,7 +113,7 @@ describe("Composer", () => {
     await user.selectOptions(screen.getByRole("combobox", { name: "Harness" }), "codex");
     await user.type(screen.getByRole("combobox", { name: "Model" }), " gpt-next ");
     await user.selectOptions(screen.getByRole("combobox", { name: "Effort" }), "medium");
-    await user.selectOptions(screen.getByRole("combobox", { name: "Base branch" }), "develop");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Branch" }), "new:develop");
     await user.click(screen.getByRole("button", { name: "Start" }));
 
     expect(core.workspaceCreate).toHaveBeenCalledWith(
@@ -122,6 +127,32 @@ describe("Composer", () => {
       model: "gpt-next",
       effort: "medium",
     });
+  });
+
+  it("opens an existing branch instead of creating one, offering only branches nobody has checked out", async () => {
+    const created = worktree("app", "kept-earlier");
+    core.workspaceCreate.mockResolvedValue({ workspace: created, session: session(created.id) });
+    const user = await renderComposer();
+
+    const group = screen.getByRole("group", { name: "Open existing branch" });
+    expect(
+      within(group)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["develop", "sy/kept-earlier"]);
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Branch" }),
+      "open:sy/kept-earlier",
+    );
+    expect(screen.getByText(/Enter to start/)).toHaveTextContent(
+      'Opens the existing branch "sy/kept-earlier"',
+    );
+    await user.click(screen.getByRole("button", { name: "Start" }));
+
+    expect(core.workspaceCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ baseBranch: null, existingBranch: "sy/kept-earlier" }),
+    );
   });
 
   it("Shift+Enter breaks the line instead of sending", async () => {
