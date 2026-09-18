@@ -2,9 +2,11 @@ import { create } from "zustand";
 import type { RendererKind } from "@/features/terminal/renderer";
 import {
   errorMessage,
+  HARNESS_LABEL,
   ipc,
   WORKSPACE_LABEL,
   type ExitInfo,
+  type HarnessRequest,
   type SessionId,
   type SessionInfo,
   type TermSize,
@@ -30,8 +32,10 @@ interface TerminalState {
 
   /** Adopt sessions already running in the core (e.g. after the webview reloads). */
   hydrate: () => Promise<void>;
-  /** Start `program` — the user's shell when omitted — in a workspace. */
-  open: (workspaceId: string, program?: string) => Promise<void>;
+  /** Start a harness — or the user's shell when omitted — in a workspace. */
+  open: (workspaceId: string, harness?: HarnessRequest) => Promise<void>;
+  /** Show a session the core started on our behalf (a new workspace's first harness). */
+  adopt: (session: SessionInfo) => void;
   close: (id: SessionId) => Promise<void>;
   /** Close every session of the given workspaces, e.g. when their project is removed. */
   closeWorkspaces: (workspaceIds: string[]) => Promise<void>;
@@ -55,7 +59,7 @@ function tabFor(session: SessionInfo): TerminalTab | null {
   return {
     id: session.id,
     workspaceId,
-    title: name.replace(/\.(exe|cmd|bat)$/i, ""),
+    title: session.labels[HARNESS_LABEL] ?? name.replace(/\.(exe|cmd|bat)$/i, ""),
     exit:
       session.state.status === "exited" ? session.state.exit : (earlyExits.get(session.id) ?? null),
   };
@@ -83,25 +87,30 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     });
   },
 
-  async open(workspaceId, program) {
+  async open(workspaceId, harness) {
     try {
       const session = await ipc.ptySpawn({
-        program: program ?? null,
+        program: null,
         args: [],
         cwd: null,
         workspaceId,
+        harness: harness ?? null,
         size: get().lastSize,
       });
-      const tab = tabFor(session);
-      if (!tab) throw new Error("The core started a session without a workspace label.");
-      set((state) => ({
-        tabs: [...state.tabs, tab],
-        active: { ...state.active, [workspaceId]: tab.id },
-        error: null,
-      }));
+      get().adopt(session);
     } catch (error) {
       set({ error: errorMessage(error) });
     }
+  },
+
+  adopt(session) {
+    const tab = tabFor(session);
+    if (!tab) return console.error("Session without a workspace label:", session.id);
+    set((state) => ({
+      tabs: state.tabs.some((known) => known.id === tab.id) ? state.tabs : [...state.tabs, tab],
+      active: { ...state.active, [tab.workspaceId]: tab.id },
+      error: null,
+    }));
   },
 
   async close(id) {

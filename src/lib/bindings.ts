@@ -19,6 +19,16 @@ export const commands = {
 	projectsReorder: (orderedIds: string[]) => typedError<null, IpcError>(__TAURI_INVOKE("projects_reorder", { orderedIds })),
 	uiStateLoad: () => typedError<{ [key in string]: string }, IpcError>(__TAURI_INVOKE("ui_state_load")),
 	uiStateSave: (key: string, value: string) => typedError<null, IpcError>(__TAURI_INVOKE("ui_state_save", { key, value })),
+	harnessesList: () => typedError<HarnessInfo[], IpcError>(__TAURI_INVOKE("harnesses_list")),
+	projectBranches: (projectId: string) => typedError<BranchList, IpcError>(__TAURI_INVOKE("project_branches", { projectId })),
+	/**
+	 *  The core loop: make a worktree on a new branch and start a harness in it with the user's
+	 *  first message. If the harness cannot start, the worktree and branch are taken back, so a
+	 *  failed attempt leaves no trace.
+	 */
+	workspaceCreate: (request: NewWorkspace) => typedError<CreatedWorkspace, IpcError>(__TAURI_INVOKE("workspace_create", { request })),
+	/**  Remove a workspace's worktree. The branch is kept. Fails with `worktree_dirty` unless `force`. */
+	workspaceDelete: (id: string, force: boolean) => typedError<null, IpcError>(__TAURI_INVOKE("workspace_delete", { id, force })),
 	envInfo: (reload: boolean) => typedError<EnvInfo, IpcError>(__TAURI_INVOKE("env_info", { reload })),
 	ptySpawn: (request: SpawnRequest) => typedError<SessionInfo, IpcError>(__TAURI_INVOKE("pty_spawn", { request })),
 	/**  Stream a session into `output`: first a snapshot that repaints the terminal, then live bytes. */
@@ -57,6 +67,17 @@ export type AppInfo = {
 	dev: DevFlags,
 };
 
+export type BranchList = {
+	branches: string[],
+	/**  The branch to offer first: the remote's default, or the one checked out. */
+	default: string | null,
+};
+
+export type CreatedWorkspace = {
+	workspace: Workspace,
+	session: SessionInfo,
+};
+
 /**
  *  Switches for measuring and debugging, read from the environment. Always empty in release
  *  builds.
@@ -92,6 +113,43 @@ export type ExitInfo = {
 	signal: string | null,
 };
 
+export type HarnessDef = {
+	/**  Stable key, recorded with sessions. */
+	id: string,
+	label: string,
+	command: string,
+	/**  Always passed. */
+	baseArgs: string[],
+	modelArgs: string[],
+	effortArgs: string[],
+	sessionArgs: string[],
+	promptArgs: string[],
+	resumeArgs: string[],
+	forkArgs: string[],
+	/**  Effort levels to offer. Empty hides the picker. */
+	efforts: string[],
+	/**  Model suggestions. Free text is always accepted: names change faster than we ship. */
+	models: string[],
+	promptTransport: PromptTransport,
+	sessionIdMode: SessionIdMode,
+};
+
+/**  A harness definition plus whether its command can be found on this machine. */
+export type HarnessInfo = {
+	/**  Where `command` resolved to on the user's `PATH`; `None` if it is not installed. */
+	resolvedPath: string | null,
+} & HarnessDef;
+
+/**  Which harness to start, and with what. */
+export type HarnessRequest = {
+	id: string,
+	/**  `None` or empty: let the harness use its own default. */
+	model: string | null,
+	effort: string | null,
+	/**  The first message. `None` or empty just opens the harness. */
+	prompt: string | null,
+};
+
 export type HeadInfo = {
 	/**  Branch name, or the abbreviated commit when detached. */
 	label: string,
@@ -114,6 +172,14 @@ export type IpcError = {
 	message: string,
 };
 
+export type NewWorkspace = {
+	projectId: string,
+	/**  `None` starts from the project's default branch. */
+	baseBranch: string | null,
+	harness: HarnessRequest,
+	size: TermSize,
+};
+
 export type Project = {
 	id: string,
 	name: string,
@@ -125,6 +191,15 @@ export type Project = {
 	missing: boolean,
 	workspaces: Workspace[],
 };
+
+export type PromptTransport = 
+/**  The prompt is an argument. Simple and reliable. */
+"argv" | 
+/**
+ *  The prompt is typed into the terminal once the harness is up. Arrives with M4; no
+ *  built-in needs it.
+ */
+"stdin";
 
 /**  Emitted for every [`HostEvent`]. */
 export type PtyHostEvent = HostEvent;
@@ -140,6 +215,15 @@ export type RawBytes = number[];
 
 /**  Opaque, globally unique session identifier. */
 export type SessionId = string;
+
+export type SessionIdMode = 
+/**  We choose the harness's session id up front, so resume is deterministic. */
+"assigned" | 
+/**
+ *  The harness picks; we resume "the latest session in this directory", which is safe
+ *  because every workspace has a directory of its own.
+ */
+"latestInCwd";
 
 export type SessionInfo = {
 	id: SessionId,
@@ -170,6 +254,8 @@ export type SpawnRequest = {
 	 *  paths for this) and labels the session so it can be matched back to the workspace.
 	 */
 	workspaceId: string | null,
+	/**  Run a harness instead of `program`. Requires `workspace_id`. */
+	harness: HarnessRequest | null,
 	size: TermSize,
 };
 
@@ -186,6 +272,8 @@ export type Workspace = {
 	path: string,
 	/**  What is checked out right now, asked of git at listing time. */
 	head: HeadInfo | null,
+	/**  The folder is gone. Only deleting the workspace makes sense then. */
+	missing: boolean,
 };
 
 export type WorkspaceKind = 

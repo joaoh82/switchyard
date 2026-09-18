@@ -11,6 +11,7 @@ use tauri::{AppHandle, State};
 
 use crate::env::{EnvSource, ShellEnv};
 use crate::error::{IpcError, IpcResult};
+use crate::harness::{self, LaunchValues, SessionIdMode};
 use crate::state::{blocking, AppState};
 
 /// Emitted for every [`HostEvent`].
@@ -44,11 +45,40 @@ pub struct SpawnRequest {
     /// Run inside this workspace: the core looks up its folder (the webview never supplies
     /// paths for this) and labels the session so it can be matched back to the workspace.
     pub workspace_id: Option<String>,
+    /// Run a harness instead of `program`. Requires `workspace_id`.
+    pub harness: Option<HarnessRequest>,
     pub size: TermSize,
+}
+
+/// Which harness to start, and with what.
+#[derive(Debug, Clone, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessRequest {
+    pub id: String,
+    /// `None` or empty: let the harness use its own default.
+    pub model: Option<String>,
+    pub effort: Option<String>,
+    /// The first message. `None` or empty just opens the harness.
+    pub prompt: Option<String>,
+}
+
+/// What to run in a workspace.
+pub enum Launch {
+    /// The user's shell.
+    Shell,
+    Program {
+        program: String,
+        args: Vec<String>,
+    },
+    Harness(HarnessRequest),
 }
 
 /// Label carrying the id of the workspace a session belongs to.
 pub const WORKSPACE_LABEL: &str = "workspace";
+/// Labels recording which harness a session runs and the harness's own session id (when we
+/// assigned one), so the session can be resumed or forked later.
+pub const HARNESS_LABEL: &str = "harness";
+pub const HARNESS_SESSION_LABEL: &str = "harnessSession";
 
 /// What the launch environment looks like, for the status bar and for bug reports.
 #[derive(Debug, Clone, Serialize, Type)]
@@ -80,26 +110,78 @@ impl From<&ShellEnv> for EnvInfo {
 pub async fn pty_spawn(app: AppHandle, request: SpawnRequest) -> IpcResult<SessionInfo> {
     // Resolving the environment and forking are both blocking.
     blocking(app, move |state| {
-        let mut request = request;
-        let mut labels = std::collections::BTreeMap::new();
-        if let Some(id) = request.workspace_id.clone() {
-            let workspace = state.store.workspace(&id)?.ok_or_else(|| {
-                IpcError::new("unknown_workspace", "That workspace no longer exists.")
-            })?;
-            if !std::path::Path::new(&workspace.path).is_dir() {
-                return Err(IpcError::new(
-                    "workspace_missing",
-                    format!("{} does not exist any more.", workspace.path),
-                ));
+        let launch = match (request.harness, request.program) {
+            (Some(harness), _) => Launch::Harness(harness),
+            (None, Some(program)) => Launch::Program {
+                program,
+                args: request.args,
+            },
+            (None, None) => Launch::Shell,
+        };
+        match request.workspace_id {
+            Some(workspace_id) => spawn_in_workspace(state, &workspace_id, launch, request.size),
+            None => {
+                let (program, args, labels) = resolve_launch(launch)?;
+                let mut plan = launch_plan(&state.env(), program, args, request.cwd, request.size)?;
+                plan.labels = labels;
+                Ok(state.host.spawn(plan)?)
             }
-            request.cwd = Some(workspace.path);
-            labels.insert(WORKSPACE_LABEL.to_owned(), id);
         }
-        let mut plan = launch_plan(&state.env(), request)?;
-        plan.labels = labels;
-        Ok(state.host.spawn(plan)?)
     })
     .await
+}
+
+/// Start something in a workspace's folder, labelled so it can be matched back to it.
+pub fn spawn_in_workspace(
+    state: &AppState,
+    workspace_id: &str,
+    launch: Launch,
+    size: TermSize,
+) -> IpcResult<SessionInfo> {
+    let workspace = state
+        .store
+        .workspace(workspace_id)?
+        .ok_or_else(|| IpcError::new("unknown_workspace", "That workspace no longer exists."))?;
+    if !std::path::Path::new(&workspace.path).is_dir() {
+        return Err(IpcError::new(
+            "workspace_missing",
+            format!("{} does not exist any more.", workspace.path),
+        ));
+    }
+    let (program, args, mut labels) = resolve_launch(launch)?;
+    labels.insert(WORKSPACE_LABEL.to_owned(), workspace_id.to_owned());
+    let mut plan = launch_plan(&state.env(), program, args, Some(workspace.path), size)?;
+    plan.labels = labels;
+    Ok(state.host.spawn(plan)?)
+}
+
+type Labels = std::collections::BTreeMap<String, String>;
+
+/// Turn a [`Launch`] into a program, its argv and the labels describing it.
+fn resolve_launch(launch: Launch) -> IpcResult<(Option<String>, Vec<String>, Labels)> {
+    let mut labels = Labels::new();
+    Ok(match launch {
+        Launch::Shell => (None, vec![], labels),
+        Launch::Program { program, args } => (Some(program), args, labels),
+        Launch::Harness(request) => {
+            let def = harness::find(&request.id).ok_or_else(|| {
+                IpcError::new("unknown_harness", "That harness is not configured.")
+            })?;
+            let session_id = (def.session_id_mode == SessionIdMode::Assigned)
+                .then(|| uuid::Uuid::new_v4().to_string());
+            let args = def.start_args(&LaunchValues {
+                prompt: request.prompt,
+                model: request.model,
+                effort: request.effort,
+                session_id: session_id.clone(),
+            });
+            labels.insert(HARNESS_LABEL.to_owned(), def.id);
+            if let Some(session_id) = session_id {
+                labels.insert(HARNESS_SESSION_LABEL.to_owned(), session_id);
+            }
+            (Some(def.command), args, labels)
+        }
+    })
 }
 
 /// Stream a session into `output`: first a snapshot that repaints the terminal, then live bytes.
@@ -182,17 +264,22 @@ pub async fn env_info(app: AppHandle, reload: bool) -> IpcResult<EnvInfo> {
 
 /// Turn a request into a concrete plan: pick the program, find it on the *user's* `PATH`, and
 /// hand the process the user's environment.
-fn launch_plan(env: &Arc<ShellEnv>, request: SpawnRequest) -> IpcResult<LaunchPlan> {
-    let cwd = request
-        .cwd
+fn launch_plan(
+    env: &Arc<ShellEnv>,
+    program: Option<String>,
+    args: Vec<String>,
+    cwd: Option<String>,
+    size: TermSize,
+) -> IpcResult<LaunchPlan> {
+    let cwd = cwd
         .map(PathBuf::from)
         .or_else(|| env.home_dir())
         .filter(|dir| dir.is_dir())
         .or_else(|| std::env::current_dir().ok())
         .ok_or_else(|| IpcError::new("bad_cwd", "no usable working directory"))?;
 
-    let (program, args) = match request.program {
-        Some(program) => (program, request.args),
+    let (program, args) = match program {
+        Some(program) => (program, args),
         None => env.default_shell(),
     };
 
@@ -219,7 +306,7 @@ fn launch_plan(env: &Arc<ShellEnv>, request: SpawnRequest) -> IpcResult<LaunchPl
             .collect(),
         // The resolved environment is complete; nothing from the GUI process should leak in.
         clear_env: env.source == EnvSource::LoginShell,
-        size: request.size,
+        size,
         labels: Default::default(),
     })
 }
@@ -253,27 +340,25 @@ mod tests {
         })
     }
 
-    fn request(program: Option<&str>) -> SpawnRequest {
-        SpawnRequest {
-            program: program.map(str::to_owned),
-            args: vec!["--flag".into()],
-            cwd: None,
-            workspace_id: None,
-            size: TermSize { cols: 80, rows: 24 },
-        }
-    }
+    const SIZE: TermSize = TermSize { cols: 80, rows: 24 };
 
     #[test]
     fn unknown_programs_fail_with_a_useful_error() {
-        let err =
-            launch_plan(&process_env(), request(Some("switchyard-no-such-program"))).unwrap_err();
+        let err = launch_plan(
+            &process_env(),
+            Some("switchyard-no-such-program".into()),
+            vec![],
+            None,
+            SIZE,
+        )
+        .unwrap_err();
         assert_eq!(err.code, "program_not_found");
         assert!(err.message.contains("switchyard-no-such-program"));
     }
 
     #[test]
     fn no_program_means_the_users_shell_in_a_real_directory() {
-        let plan = launch_plan(&process_env(), request(None)).unwrap();
+        let plan = launch_plan(&process_env(), None, vec![], None, SIZE).unwrap();
         assert!(PathBuf::from(&plan.program).is_absolute() || plan.program == "cmd.exe");
         assert!(plan.cwd.unwrap().is_dir());
         assert!(
@@ -284,13 +369,36 @@ mod tests {
 
     #[test]
     fn a_missing_cwd_falls_back_instead_of_failing() {
-        let mut req = request(None);
-        req.cwd = Some("/definitely/not/a/real/dir".into());
-        assert!(launch_plan(&process_env(), req)
-            .unwrap()
-            .cwd
-            .unwrap()
-            .is_dir());
+        let cwd = Some("/definitely/not/a/real/dir".to_owned());
+        let plan = launch_plan(&process_env(), None, vec![], cwd, SIZE).unwrap();
+        assert!(plan.cwd.unwrap().is_dir());
+    }
+
+    #[test]
+    fn a_harness_launch_is_labelled_and_gets_a_session_id_when_the_harness_takes_one() {
+        let request = |id: &str| HarnessRequest {
+            id: id.into(),
+            model: Some("opus".into()),
+            effort: None,
+            prompt: Some("fix it".into()),
+        };
+        let (program, args, labels) = resolve_launch(Launch::Harness(request("claude"))).unwrap();
+        assert_eq!(program.as_deref(), Some("claude"));
+        let session = &labels[HARNESS_SESSION_LABEL];
+        assert_eq!(args, ["--model", "opus", "--session-id", session, "fix it"]);
+        assert_eq!(labels[HARNESS_LABEL], "claude");
+
+        let (_, args, labels) = resolve_launch(Launch::Harness(request("codex"))).unwrap();
+        assert_eq!(args, ["-m", "opus", "fix it"]);
+        assert!(
+            !labels.contains_key(HARNESS_SESSION_LABEL),
+            "codex picks its own id"
+        );
+
+        let err = resolve_launch(Launch::Harness(request("nope")))
+            .err()
+            .unwrap();
+        assert_eq!(err.code, "unknown_harness");
     }
 
     #[cfg(not(windows))]

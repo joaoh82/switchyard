@@ -155,6 +155,48 @@ impl Store {
             .optional()?)
     }
 
+    pub fn project(&self, id: &str) -> StoreResult<Option<ProjectRow>> {
+        Ok(self
+            .projects()?
+            .into_iter()
+            .find(|project| project.id == id))
+    }
+
+    /// Record a worktree workspace, after `local` and any earlier ones.
+    pub fn add_worktree(
+        &self,
+        project_id: &str,
+        name: &str,
+        path: &str,
+        branch: &str,
+        base_branch: &str,
+    ) -> StoreResult<WorkspaceRow> {
+        let conn = self.conn();
+        let id = new_id();
+        conn.execute(
+            "INSERT INTO workspaces (id, project_id, kind, name, path, branch, base_branch, sort_order, created_at)
+             VALUES (?1, ?2, 'worktree', ?3, ?4, ?5, ?6,
+                     (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM workspaces WHERE project_id = ?2), ?7)",
+            params![id, project_id, name, path, branch, base_branch, now_ms()],
+        )?;
+        Ok(WorkspaceRow {
+            id,
+            project_id: project_id.to_owned(),
+            kind: "worktree".to_owned(),
+            name: name.to_owned(),
+            path: path.to_owned(),
+            branch: Some(branch.to_owned()),
+        })
+    }
+
+    /// Forget a worktree workspace. `local` rows cannot be removed this way.
+    pub fn remove_worktree(&self, id: &str) -> StoreResult<bool> {
+        Ok(self.conn().execute(
+            "DELETE FROM workspaces WHERE id = ? AND kind = 'worktree'",
+            [id],
+        )? > 0)
+    }
+
     /// Forget a project and its workspaces. Returns whether it existed.
     pub fn remove_project(&self, id: &str) -> StoreResult<bool> {
         Ok(self
@@ -292,6 +334,35 @@ mod tests {
         assert!(store.remove_project(&project.id).unwrap());
         assert!(store.workspaces().unwrap().is_empty());
         assert!(!store.remove_project(&project.id).unwrap());
+    }
+
+    #[test]
+    fn worktrees_list_after_local_in_creation_order_and_local_is_permanent() {
+        let store = Store::in_memory();
+        let project = store.add_project("app", "/code/app").unwrap();
+        let first = store
+            .add_worktree(&project.id, "one", "/wt/one", "sy/one", "main")
+            .unwrap();
+        store
+            .add_worktree(&project.id, "two", "/wt/two", "sy/two", "main")
+            .unwrap();
+
+        let names: Vec<_> = store
+            .workspaces()
+            .unwrap()
+            .into_iter()
+            .map(|w| w.name)
+            .collect();
+        assert_eq!(names, ["local", "one", "two"]);
+
+        let local = store.workspaces().unwrap().remove(0);
+        assert!(
+            !store.remove_worktree(&local.id).unwrap(),
+            "local cannot be deleted"
+        );
+        assert!(store.remove_worktree(&first.id).unwrap());
+        assert_eq!(store.workspaces().unwrap().len(), 2);
+        assert_eq!(store.project(&project.id).unwrap().unwrap().name, "app");
     }
 
     #[test]

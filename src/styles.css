@@ -17,8 +17,14 @@
     Consolas, monospace;
 }
 
+/* Make native controls — selects, scrollbars, date pickers — follow the theme too. */
+:root {
+  color-scheme: dark;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
+    color-scheme: light;
     --color-canvas: #f4f5f7;
     --color-surface: #ffffff;
     --color-raised: #eceef1;

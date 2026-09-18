@@ -30,7 +30,8 @@ effort_args = ["--effort", "{effort}"]             # omitted when effort = defau
 efforts     = ["low", "medium", "high", "xhigh", "max"]
 models      = ["fable", "opus", "sonnet"]          # suggestions only; free text allowed
 
-prompt_args = ["--session-id", "{session_id}", "{prompt}"]
+session_args = ["--session-id", "{session_id}"]    # omitted unless session_id_mode = "assigned"
+prompt_args = ["{prompt}"]                         # omitted when there is no opening message
 resume_args = ["--resume", "{session_id}"]
 fork_args   = ["--resume", "{session_id}", "--fork-session", "--session-id", "{new_session_id}"]
 
@@ -55,8 +56,10 @@ every harness needing hand-written templates.
 - Placeholders: `{prompt}` `{model}` `{effort}` `{session_id}` `{new_session_id}` `{workspace}`
   `{worktree}` `{branch}`.
 - An arg group whose placeholder has no value is dropped whole (no model chosen → no `--model`).
-- Final argv = `command` + `base_args` + `model_args` + `effort_args` + (`prompt_args` |
-  `resume_args` | `fork_args`).
+- Final argv to start = `command` + `base_args` + `model_args` + `effort_args` + `session_args` +
+  `prompt_args`; to resume or fork, `resume_args` / `fork_args` take the place of the last two.
+  The session id has a group of its own so that an empty prompt drops only the prompt.
+- Braces that are not one of our placeholders are literal, so JSON can be passed in an argument.
 - Built-in definitions are compiled in. User edits are stored as overrides, so **Restore defaults**
   is just "delete the override", and new app versions can ship corrected defaults.
 

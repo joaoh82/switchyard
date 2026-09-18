@@ -50,7 +50,7 @@ impl Git {
         })
     }
 
-    fn run(&self, cwd: &Path, args: &[&str]) -> GitResult<String> {
+    pub(crate) fn run(&self, cwd: &Path, args: &[&str]) -> GitResult<String> {
         let mut command = Command::new(&self.program);
         command
             .args(args)
@@ -121,6 +121,82 @@ impl Git {
                 .map(Head::Detached),
             Err(other) => Err(other),
         }
+    }
+}
+
+impl Git {
+    /// Local branch names, in git's own order.
+    pub fn branches(&self, root: &Path) -> GitResult<Vec<String>> {
+        let out = self.run(
+            root,
+            &["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+        )?;
+        Ok(out.lines().map(str::to_owned).collect())
+    }
+
+    pub fn branch_exists(&self, root: &Path, branch: &str) -> GitResult<bool> {
+        let reference = format!("refs/heads/{branch}");
+        match self.run(root, &["show-ref", "--verify", "--quiet", &reference]) {
+            Ok(_) => Ok(true),
+            Err(GitError::Failed { .. }) => Ok(false),
+            Err(other) => Err(other),
+        }
+    }
+
+    /// The branch new work should start from: what the remote calls its default if we know it
+    /// and have it locally, otherwise whatever is checked out.
+    pub fn default_branch(&self, root: &Path) -> GitResult<Option<String>> {
+        if let Ok(remote_head) = self.run(
+            root,
+            &[
+                "symbolic-ref",
+                "--quiet",
+                "--short",
+                "refs/remotes/origin/HEAD",
+            ],
+        ) {
+            let name = remote_head.strip_prefix("origin/").unwrap_or(&remote_head);
+            if self.branch_exists(root, name)? {
+                return Ok(Some(name.to_owned()));
+            }
+        }
+        Ok(match self.head(root)? {
+            Head::Branch(name) => Some(name),
+            Head::Unborn(_) | Head::Detached(_) => None,
+        })
+    }
+
+    /// Create `branch` from `base` and check it out in a new worktree at `path`.
+    pub fn worktree_add(
+        &self,
+        root: &Path,
+        path: &Path,
+        branch: &str,
+        base: &str,
+    ) -> GitResult<()> {
+        let path = path.to_string_lossy();
+        self.run(root, &["worktree", "add", "-b", branch, &path, base])
+            .map(drop)
+    }
+
+    /// Remove a worktree. Without `force`, git refuses if it holds modified or untracked files.
+    pub fn worktree_remove(&self, root: &Path, path: &Path, force: bool) -> GitResult<()> {
+        let path = path.to_string_lossy();
+        let mut args = vec!["worktree", "remove"];
+        if force {
+            args.push("--force");
+        }
+        args.push(&path);
+        self.run(root, &args).map(drop)
+    }
+
+    /// Forget worktrees whose folders no longer exist.
+    pub fn worktree_prune(&self, root: &Path) -> GitResult<()> {
+        self.run(root, &["worktree", "prune"]).map(drop)
+    }
+
+    pub fn branch_delete(&self, root: &Path, branch: &str) -> GitResult<()> {
+        self.run(root, &["branch", "-D", branch]).map(drop)
     }
 }
 
@@ -195,6 +271,77 @@ mod tests {
 
         git.run(dir.path(), &["checkout", "--detach"]).unwrap();
         assert!(matches!(git.head(dir.path()).unwrap(), Head::Detached(sha) if sha.len() >= 7));
+    }
+
+    fn repo_with_commit() -> (Git, tempfile::TempDir) {
+        let git = testing::git();
+        let dir = tempfile::tempdir().unwrap();
+        git.init(dir.path()).unwrap();
+        git.run(dir.path(), &["checkout", "-b", "trunk"]).unwrap();
+        git.initial_commit(dir.path()).unwrap();
+        (git, dir)
+    }
+
+    #[test]
+    fn worktrees_are_added_on_a_new_branch_and_removed_again() {
+        let (git, repo) = repo_with_commit();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let path = elsewhere.path().join("feature");
+
+        git.worktree_add(repo.path(), &path, "sy/feature", "trunk")
+            .unwrap();
+        assert_eq!(git.head(&path).unwrap(), Head::Branch("sy/feature".into()));
+        assert!(git.branch_exists(repo.path(), "sy/feature").unwrap());
+        assert_eq!(git.branches(repo.path()).unwrap(), ["sy/feature", "trunk"]);
+
+        git.worktree_remove(repo.path(), &path, false).unwrap();
+        assert!(!path.exists());
+        assert!(
+            git.branch_exists(repo.path(), "sy/feature").unwrap(),
+            "the branch outlives it"
+        );
+        git.branch_delete(repo.path(), "sy/feature").unwrap();
+        assert!(!git.branch_exists(repo.path(), "sy/feature").unwrap());
+    }
+
+    #[test]
+    fn a_dirty_worktree_is_only_removed_by_force() {
+        let (git, repo) = repo_with_commit();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let path = elsewhere.path().join("wip");
+        git.worktree_add(repo.path(), &path, "sy/wip", "trunk")
+            .unwrap();
+        std::fs::write(path.join("unsaved.txt"), "work in progress").unwrap();
+
+        assert!(git.worktree_remove(repo.path(), &path, false).is_err());
+        assert!(path.join("unsaved.txt").exists());
+        git.worktree_remove(repo.path(), &path, true).unwrap();
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn the_default_branch_is_the_checked_out_one_without_a_remote() {
+        let (git, repo) = repo_with_commit();
+        assert_eq!(
+            git.default_branch(repo.path()).unwrap(),
+            Some("trunk".into())
+        );
+        git.run(repo.path(), &["checkout", "--detach"]).unwrap();
+        assert_eq!(git.default_branch(repo.path()).unwrap(), None);
+    }
+
+    #[test]
+    fn the_default_branch_follows_the_remotes_head() {
+        let (git, origin) = repo_with_commit();
+        let dir = tempfile::tempdir().unwrap();
+        let clone = dir.path().join("clone");
+        git.run(
+            dir.path(),
+            &["clone", &origin.path().to_string_lossy(), "clone"],
+        )
+        .unwrap();
+        git.run(&clone, &["checkout", "-b", "side-quest"]).unwrap();
+        assert_eq!(git.default_branch(&clone).unwrap(), Some("trunk".into()));
     }
 
     #[test]

@@ -8,15 +8,15 @@ settled.
 1. **What exactly does `local` run?** Lean: same as a workspace (harness or shell tabs), rooted at
    the repo's own checkout, on whatever branch is checked out. Should its row offer the composer too,
    or open straight to a shell?
-2. **Workspace naming.** Slug from the first message (readable, sometimes silly) vs generated names
-   (a rail theme — station names — would suit the product). Lean: generated name at creation,
-   one-click rename, optionally ask the harness to title it later.
+2. ~~**Workspace naming.**~~ **Settled in M3:** a slug of the first message (filler words dropped,
+   four words, 32 characters), numbered when taken; a railway station when the message yields
+   nothing. Renaming arrives in M6.
 3. **Multiple sessions per workspace?** Lean: yes, as tabs — the data model already allows it.
 4. **Do we ever want our own chat UI?** The brief says the centre is a terminal, and that is v1.
    OpenCode (`opencode acp`) and others expose agent protocols that would allow a native UI later.
    Lean: not before v1; keep the core free of terminal-only assumptions where that's cheap.
-5. **What happens to the branch when a workspace is deleted?** Lean: ask each time, default to keep
-   if it has unmerged commits.
+5. **What happens to the branch when a workspace is deleted?** For now it is **always kept** —
+   deleting never throws commits away. M6 adds the choice to delete a fully merged branch as well.
 
 ## Technical
 
@@ -29,8 +29,9 @@ settled.
    Do we support launching harnesses _inside WSL_ (`wsl.exe -d <distro> -- claude …`, worktree on
    the WSL filesystem)? Lean: native first; treat WSL as a per-harness command prefix + path
    translation, designed in M4, built when someone needs it.
-8. **Worktree root default.** `<data-dir>/worktrees/…` (hidden, tidy) vs `~/switchyard/…` (visible,
-   short — matters on Windows). Lean: visible and short, configurable.
+8. ~~**Worktree root default.**~~ **Settled in M3:** visible and short —
+   `~/switchyard/<project>/<workspace>`; `SWITCHYARD_WORKTREE_ROOT` overrides it, and M4 makes it
+   a setting.
 9. **Diff viewer.** CodeMirror 6 merge view (light, flexible) vs Monaco (heavier, familiar) vs a
    dedicated React diff component. Lean: CodeMirror; decide with a spike in M5.
 10. ~~**Frontend framework.**~~ **Settled 2026-09-17: React** (+ TypeScript, Vite, Tailwind,

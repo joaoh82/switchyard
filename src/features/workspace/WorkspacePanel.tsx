@@ -1,18 +1,22 @@
+import { Composer } from "@/features/composer/Composer";
 import { BenchRunner } from "@/features/terminal/BenchRunner";
-import { QUICK_LAUNCH } from "@/features/terminal/quickLaunch";
+import { bareHarness, QUICK_LAUNCH } from "@/features/terminal/quickLaunch";
 import { TerminalTabs } from "@/features/terminal/TerminalTabs";
 import { TerminalView } from "@/features/terminal/TerminalView";
 import { useTerminalSessions } from "@/features/terminal/useTerminalSessions";
-import type { Project, Workspace } from "@/lib/ipc";
+import type { HarnessRequest, Project, Workspace } from "@/lib/ipc";
 import { useAppStore } from "@/stores/app";
 import { useProjectsStore, useSelectedWorkspace } from "@/stores/projects";
 import { useTerminalStore } from "@/stores/terminals";
 
-/** Center panel: the terminals of the selected workspace. (The composer arrives in M3.) */
+/** Center panel: the composer while a workspace is being started, otherwise its terminals. */
 export function WorkspacePanel() {
   useTerminalSessions();
   const dev = useAppStore((s) => s.info?.dev);
   const selection = useSelectedWorkspace();
+  const composingFor = useProjectsStore((s) =>
+    s.projects.find((project) => project.id === s.composingProjectId),
+  );
 
   if (dev?.bench) {
     return (
@@ -23,7 +27,9 @@ export function WorkspacePanel() {
   }
   return (
     <main aria-label="Workspace" className="flex h-full flex-col bg-canvas">
-      {selection ? (
+      {composingFor ? (
+        <Composer key={composingFor.id} project={composingFor} />
+      ) : selection ? (
         <WorkspaceTerminals {...selection} rendererOverride={dev?.renderer} />
       ) : (
         <Welcome />
@@ -70,7 +76,7 @@ function WorkspaceTerminals(props: {
         ) : (
           <Centered>
             <p className="text-ink-muted">Nothing running in this workspace.</p>
-            <LaunchButtons onLaunch={(program) => void open(workspace.id, program)} />
+            <LaunchButtons onLaunch={(harness) => void open(workspace.id, harness)} />
           </Centered>
         )}
       </div>
@@ -108,17 +114,17 @@ function Welcome() {
   );
 }
 
-function LaunchButtons({ onLaunch }: { onLaunch: (program?: string) => void }) {
+function LaunchButtons({ onLaunch }: { onLaunch: (harness?: HarnessRequest) => void }) {
+  const button =
+    "rounded border border-line px-3 py-1 text-ink-muted hover:border-accent hover:text-ink";
   return (
     <div className="mt-4 flex flex-wrap justify-center gap-2">
-      {[undefined, ...QUICK_LAUNCH].map((program) => (
-        <button
-          key={program ?? "shell"}
-          type="button"
-          onClick={() => onLaunch(program)}
-          className="rounded border border-line px-3 py-1 text-ink-muted hover:border-accent hover:text-ink"
-        >
-          {program ?? "shell"}
+      <button type="button" onClick={() => onLaunch()} className={button}>
+        shell
+      </button>
+      {QUICK_LAUNCH.map((id) => (
+        <button key={id} type="button" onClick={() => onLaunch(bareHarness(id))} className={button}>
+          {id}
         </button>
       ))}
     </div>

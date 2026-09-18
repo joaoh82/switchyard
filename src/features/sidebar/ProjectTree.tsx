@@ -3,7 +3,7 @@ import type { Project, Workspace } from "@/lib/ipc";
 import { native } from "@/lib/native";
 import { useProjectsStore } from "@/stores/projects";
 import { useTerminalStore } from "@/stores/terminals";
-import { enterWorkspace, removeProject } from "./actions";
+import { deleteWorkspace, enterWorkspace, removeProject } from "./actions";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 
 export function ProjectTree() {
@@ -27,9 +27,12 @@ function ProjectNode(props: { project: Project; isFirst: boolean; isLast: boolea
   const expanded = useProjectsStore((s) => !s.collapsed.includes(project.id));
   const toggleCollapsed = useProjectsStore((s) => s.toggleCollapsed);
   const move = useProjectsStore((s) => s.move);
+  const compose = useProjectsStore((s) => s.compose);
+  const composing = useProjectsStore((s) => s.composingProjectId === project.id);
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
 
   const items: MenuItem[] = [
+    { label: "New workspace", disabled: project.missing, onSelect: () => compose(project.id) },
     {
       label: "Reveal in file manager",
       disabled: project.missing,
@@ -77,7 +80,11 @@ function ProjectNode(props: { project: Project; isFirst: boolean; isLast: boolea
         >
           ⋯
         </RowButton>
-        <RowButton label="New workspace (coming in the next milestone)" disabled>
+        <RowButton
+          label={`New workspace in ${project.name}`}
+          disabled={project.missing}
+          onClick={() => compose(project.id)}
+        >
           +
         </RowButton>
       </div>
@@ -87,6 +94,12 @@ function ProjectNode(props: { project: Project; isFirst: boolean; isLast: boolea
           {project.workspaces.map((workspace) => (
             <WorkspaceNode key={workspace.id} workspace={workspace} disabled={project.missing} />
           ))}
+          {composing && (
+            <li className="flex h-7 items-center gap-2 bg-raised pr-2 pl-7 text-ink-muted italic">
+              <span aria-hidden className="size-1.5 shrink-0 rounded-full border border-accent" />
+              new workspace…
+            </li>
+          )}
         </ul>
       )}
       {menuAt && <ContextMenu at={menuAt} items={items} onClose={() => setMenuAt(null)} />}
@@ -95,37 +108,85 @@ function ProjectNode(props: { project: Project; isFirst: boolean; isLast: boolea
 }
 
 function WorkspaceNode({ workspace, disabled }: { workspace: Workspace; disabled: boolean }) {
-  const selected = useProjectsStore((s) => s.selectedWorkspaceId === workspace.id);
+  const selected = useProjectsStore(
+    (s) => s.selectedWorkspaceId === workspace.id && s.composingProjectId === null,
+  );
   const running = useTerminalStore((s) =>
     s.tabs.some((tab) => tab.workspaceId === workspace.id && !tab.exit),
   );
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
   const head = workspace.head;
+  const isWorktree = workspace.kind === "worktree";
+  const unusable = disabled || workspace.missing;
+
+  const items: MenuItem[] = [
+    {
+      label: "Reveal in file manager",
+      disabled: unusable,
+      onSelect: () => void native.revealInFileManager(workspace.path).catch(console.error),
+    },
+    ...(isWorktree
+      ? [
+          {
+            label: "Delete workspace…",
+            danger: true,
+            onSelect: () => void deleteWorkspace(workspace),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <li role="treeitem" aria-selected={selected} aria-label={workspace.name}>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => enterWorkspace(workspace.id)}
-        title={workspace.path}
-        className={`flex h-7 w-full items-center gap-2 pr-2 pl-7 text-left disabled:opacity-40 ${
+      <div
+        className={`group flex h-7 items-center pr-1 ${
           selected ? "bg-raised text-ink" : "text-ink-muted hover:bg-raised"
         }`}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setMenuAt({ x: event.clientX, y: event.clientY });
+        }}
       >
-        <span
-          aria-hidden
-          className={`size-1.5 shrink-0 rounded-full ${running ? "bg-accent" : "bg-line"}`}
-        />
-        <span className="truncate">{workspace.name}</span>
-        {head && (
+        <button
+          type="button"
+          disabled={unusable}
+          onClick={() => enterWorkspace(workspace.id)}
+          title={workspace.path}
+          className="flex h-full min-w-0 flex-1 items-center gap-2 pr-1 pl-7 text-left disabled:opacity-40"
+        >
           <span
-            className="ml-auto max-w-[55%] truncate font-mono text-[11px] text-ink-faint"
-            title={head.detached ? "Detached HEAD" : head.unborn ? "No commits yet" : "Branch"}
-          >
-            {head.detached ? `@${head.label}` : head.label}
+            aria-hidden
+            className={`size-1.5 shrink-0 rounded-full ${running ? "bg-accent" : "bg-line"}`}
+          />
+          <span className={`truncate ${workspace.missing ? "line-through" : ""}`}>
+            {workspace.name}
           </span>
+          {workspace.missing && !disabled && (
+            <span className="text-[11px] text-red-400">missing</span>
+          )}
+          {/* A worktree's branch is its name with a prefix; only `local` has news to tell. */}
+          {head && !isWorktree && (
+            <span
+              className="ml-auto max-w-[55%] truncate font-mono text-[11px] text-ink-faint"
+              title={head.detached ? "Detached HEAD" : head.unborn ? "No commits yet" : "Branch"}
+            >
+              {head.detached ? `@${head.label}` : head.label}
+            </span>
+          )}
+        </button>
+        {isWorktree && (
+          <RowButton
+            label={`More actions for ${workspace.name}`}
+            onClick={(event) => {
+              const box = event.currentTarget.getBoundingClientRect();
+              setMenuAt({ x: box.left, y: box.bottom + 2 });
+            }}
+          >
+            ⋯
+          </RowButton>
         )}
-      </button>
+      </div>
+      {menuAt && <ContextMenu at={menuAt} items={items} onClose={() => setMenuAt(null)} />}
     </li>
   );
 }

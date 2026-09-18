@@ -42,6 +42,8 @@ pub struct Workspace {
     pub path: String,
     /// What is checked out right now, asked of git at listing time.
     pub head: Option<HeadInfo>,
+    /// The folder is gone. Only deleting the workspace makes sense then.
+    pub missing: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
@@ -196,8 +198,9 @@ impl Projects<'_> {
         }
     }
 
-    fn describe_workspace(&self, row: WorkspaceRow) -> Workspace {
+    pub fn describe_workspace(&self, row: WorkspaceRow) -> Workspace {
         let path = PathBuf::from(&row.path);
+        let missing = !path.is_dir();
         let head = path
             .is_dir()
             .then(|| self.git.head(&path).ok())
@@ -214,6 +217,7 @@ impl Projects<'_> {
             name: row.name,
             path: row.path,
             head,
+            missing,
         }
     }
 }

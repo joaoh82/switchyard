@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { added, project } from "@/test/fixtures";
+import { added, project, worktree } from "@/test/fixtures";
 
 const core = vi.hoisted(() => ({
   uiStateLoad: vi.fn(),
@@ -11,6 +11,7 @@ const core = vi.hoisted(() => ({
   projectCreate: vi.fn(),
   projectRemove: vi.fn(),
   projectsReorder: vi.fn(),
+  workspaceDelete: vi.fn(),
   ptySpawn: vi.fn(),
   ptyClose: vi.fn(),
 }));
@@ -61,6 +62,7 @@ describe("Sidebar", () => {
       projects: [],
       loaded: false,
       selectedWorkspaceId: null,
+      composingProjectId: null,
       collapsed: [],
       error: null,
       notice: null,
@@ -191,6 +193,77 @@ describe("Sidebar", () => {
     expect(screen.getByRole("menuitem", { name: "Move up" })).toBeDisabled();
     await user.click(screen.getByRole("menuitem", { name: "Move down" }));
     expect(core.projectsReorder).toHaveBeenCalledWith(["p-beta", "p-alpha"]);
+  });
+
+  it("the project's + opens the composer for it, and picking a workspace closes it again", async () => {
+    const user = userEvent.setup();
+    await renderSidebar("alpha", "beta");
+    await user.click(screen.getByRole("button", { name: "New workspace in beta" }));
+    expect(useProjectsStore.getState().composingProjectId).toBe("p-beta");
+    expect(
+      within(screen.getByRole("treeitem", { name: "beta" })).getByText("new workspace…"),
+    ).toBeVisible();
+
+    const alpha = screen.getByRole("treeitem", { name: "alpha" });
+    await user.click(
+      within(within(alpha).getByRole("treeitem", { name: "local" })).getByRole("button"),
+    );
+    expect(useProjectsStore.getState().composingProjectId).toBeNull();
+  });
+
+  describe("deleting a workspace", () => {
+    async function openDeleteMenu() {
+      const user = userEvent.setup();
+      const app = project("app");
+      app.workspaces.push(worktree("app", "fix-login"));
+      core.projectsList.mockResolvedValue([app]);
+      render(<Sidebar />);
+      await screen.findByRole("treeitem", { name: "fix-login" });
+      await user.click(screen.getByRole("button", { name: "More actions for fix-login" }));
+      await user.click(screen.getByRole("menuitem", { name: /Delete workspace/ }));
+      return user;
+    }
+
+    it("says the branch is kept, then removes it", async () => {
+      native.confirm.mockResolvedValue(true);
+      core.workspaceDelete.mockResolvedValue(undefined);
+      await openDeleteMenu();
+
+      expect(native.confirm).toHaveBeenCalledTimes(1);
+      expect(native.confirm.mock.calls[0]![0]).toMatch(
+        /branch "sy\/fix-login" and all its commits are kept/,
+      );
+      expect(core.workspaceDelete).toHaveBeenCalledWith("w-app-fix-login", false);
+      expect(screen.queryByRole("treeitem", { name: "fix-login" })).not.toBeInTheDocument();
+    });
+
+    it("never destroys uncommitted work without a second, explicit yes", async () => {
+      core.workspaceDelete.mockRejectedValueOnce({ code: "worktree_dirty", message: "dirty" });
+      native.confirm.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+      await openDeleteMenu();
+
+      expect(native.confirm).toHaveBeenCalledTimes(2);
+      expect(native.confirm.mock.calls[1]![0]).toMatch(/destroys that work for good/);
+      expect(core.workspaceDelete).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("treeitem", { name: "fix-login" })).toBeInTheDocument();
+    });
+
+    it("forces only after that second yes", async () => {
+      core.workspaceDelete.mockRejectedValueOnce({ code: "worktree_dirty", message: "dirty" });
+      core.workspaceDelete.mockResolvedValueOnce(undefined);
+      native.confirm.mockResolvedValue(true);
+      await openDeleteMenu();
+
+      expect(core.workspaceDelete).toHaveBeenLastCalledWith("w-app-fix-login", true);
+      expect(screen.queryByRole("treeitem", { name: "fix-login" })).not.toBeInTheDocument();
+    });
+
+    it("local has no delete", async () => {
+      await renderSidebar("alpha");
+      expect(
+        screen.queryByRole("button", { name: "More actions for local" }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("a project whose folder vanished is marked and cannot be entered", async () => {

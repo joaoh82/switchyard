@@ -56,14 +56,26 @@ describe("terminal store", () => {
   });
 
   it("strips Windows paths and extensions from titles", async () => {
-    core.ptySpawn.mockResolvedValue(session("s1", "C:\\Users\\me\\AppData\\npm\\claude.cmd"));
-    await useTerminalStore.getState().open("ws", "claude");
+    core.ptySpawn.mockResolvedValue(session("s1", "C:\\Users\\me\\AppData\\npm\\tool.cmd"));
+    await useTerminalStore.getState().open("ws");
+    expect(useTerminalStore.getState().tabs[0]!.title).toBe("tool");
+  });
+
+  it("starts a harness when asked and titles the tab after it", async () => {
+    const spawned = session("s1", "/opt/bin/claude-1.2.3");
+    core.ptySpawn.mockResolvedValue({
+      ...spawned,
+      labels: { ...spawned.labels, harness: "claude" },
+    });
+    const harness = { id: "claude", model: "opus", effort: null, prompt: null };
+    await useTerminalStore.getState().open("ws", harness);
+    expect(core.ptySpawn).toHaveBeenCalledWith(expect.objectContaining({ harness, program: null }));
     expect(useTerminalStore.getState().tabs[0]!.title).toBe("claude");
   });
 
   it("surfaces a failed launch instead of opening a tab", async () => {
     core.ptySpawn.mockRejectedValue({ code: "program_not_found", message: "`nope` was not found" });
-    await useTerminalStore.getState().open("ws", "nope");
+    await useTerminalStore.getState().open("ws");
     expect(useTerminalStore.getState().tabs).toEqual([]);
     expect(useTerminalStore.getState().error).toBe("`nope` was not found");
   });
@@ -74,7 +86,7 @@ describe("terminal store", () => {
       useTerminalStore.getState().markExited("fast", exit); // the event overtakes the response
       return session("fast", "false");
     });
-    await useTerminalStore.getState().open("ws", "false");
+    await useTerminalStore.getState().open("ws");
     expect(useTerminalStore.getState().tabs[0]!.exit).toEqual(exit);
   });
 

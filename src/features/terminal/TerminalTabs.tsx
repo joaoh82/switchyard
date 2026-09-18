@@ -1,6 +1,6 @@
 import { formatShortcut } from "@/lib/platform";
 import { useTerminalStore, type TerminalTab } from "@/stores/terminals";
-import { QUICK_LAUNCH } from "./quickLaunch";
+import { bareHarness, QUICK_LAUNCH } from "./quickLaunch";
 
 export function TerminalTabs({ workspaceId }: { workspaceId: string }) {
   const allTabs = useTerminalStore((s) => s.tabs);
@@ -29,7 +29,7 @@ export function TerminalTabs({ workspaceId }: { workspaceId: string }) {
           <button
             key={program}
             type="button"
-            onClick={() => void open(workspaceId, program)}
+            onClick={() => void open(workspaceId, bareHarness(program))}
             className="rounded px-2 py-0.5 text-[11px] text-ink-faint hover:bg-raised hover:text-ink"
           >
             {program}

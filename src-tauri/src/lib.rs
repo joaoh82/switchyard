@@ -7,10 +7,12 @@ mod commands;
 mod env;
 mod error;
 mod git;
+mod harness;
 mod projects;
 mod state;
 mod store;
 mod terminal;
+mod workspaces;
 
 pub use env::print_env_and_exit_if_asked;
 
@@ -33,6 +35,10 @@ fn ipc_builder() -> Builder<tauri::Wry> {
             projects::commands::projects_reorder,
             projects::commands::ui_state_load,
             projects::commands::ui_state_save,
+            workspaces::commands::harnesses_list,
+            workspaces::commands::project_branches,
+            workspaces::commands::workspace_create,
+            workspaces::commands::workspace_delete,
             terminal::env_info,
             terminal::pty_spawn,
             terminal::pty_attach,

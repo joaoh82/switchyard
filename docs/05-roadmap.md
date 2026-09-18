@@ -44,7 +44,7 @@ Tauri webviews needs the window's native drop handling disabled, which is better
 with dropping files onto terminals. Sessions carry a `workspace` label in the PTY host, which is how
 tabs find their workspace again after a webview reload (and, later, after attaching to the daemon).
 
-## M3 — Workspaces (the core loop)
+## M3 — Workspaces (the core loop) ✅
 
 - `git` module: root / default-branch detection, worktree add / list / remove.
 - Composer UI: harness, model, effort, base branch, message.
@@ -54,6 +54,12 @@ tabs find their workspace again after a webview reload (and, later, after attach
 
 _Exit:_ from a cold start, create three workspaces in one project on different harnesses and watch
 them work in parallel. **This is the first version worth dogfooding.**
+
+_Notes:_ a basic "Delete workspace" came forward from M6, because a loop that can only create
+litters: the folder goes, the branch always stays, and uncommitted work needs a second explicit
+confirmation. Rename, archive and "delete the branch too" remain in M6. Harness sessions are
+labelled in the PTY host with their harness and (where we assign one) the harness's own session id,
+ready for M6's resume and fork.
 
 ## M4 — Harness settings
 

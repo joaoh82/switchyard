@@ -8,10 +8,15 @@ import {
   events,
   type AddedProject,
   type AppInfo,
+  type BranchList,
+  type CreatedWorkspace,
   type EnvInfo,
   type ExitInfo,
+  type HarnessInfo,
+  type HarnessRequest,
   type HostEvent,
   type IpcError,
+  type NewWorkspace,
   type Project,
   type SessionId,
   type SessionInfo,
@@ -23,10 +28,15 @@ import {
 export type {
   AddedProject,
   AppInfo,
+  BranchList,
+  CreatedWorkspace,
   EnvInfo,
   ExitInfo,
+  HarnessInfo,
+  HarnessRequest,
   HostEvent,
   IpcError,
+  NewWorkspace,
   Project,
   SessionId,
   SessionInfo,
@@ -35,8 +45,9 @@ export type {
   Workspace,
 };
 
-/** The label under which a session records the workspace it belongs to. */
+/** Session labels: the workspace a session belongs to, and the harness it runs (if any). */
 export const WORKSPACE_LABEL = "workspace";
+export const HARNESS_LABEL = "harness";
 
 /** False in a plain browser tab and in unit tests, where there is no core to call. */
 export const hasCore = isTauri;
@@ -83,6 +94,13 @@ export const ipc = {
   projectsReorder: (orderedIds: string[]) => done(commands.projectsReorder(orderedIds)),
   uiStateLoad: () => unwrap(commands.uiStateLoad()),
   uiStateSave: (key: string, value: string) => done(commands.uiStateSave(key, value)),
+
+  harnessesList: () => unwrap(commands.harnessesList()),
+  projectBranches: (projectId: string) => unwrap(commands.projectBranches(projectId)),
+  /** Worktree + branch + harness in one step; leaves nothing behind if any part fails. */
+  workspaceCreate: (request: NewWorkspace) => unwrap(commands.workspaceCreate(request)),
+  /** Rejects with code `worktree_dirty` unless `force` is set. The branch is always kept. */
+  workspaceDelete: (id: string, force = false) => done(commands.workspaceDelete(id, force)),
 
   ptySpawn: (request: SpawnRequest) => unwrap(commands.ptySpawn(request)),
   ptyList: () => unwrap(commands.ptyList()),

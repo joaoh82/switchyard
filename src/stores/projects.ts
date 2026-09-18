@@ -1,6 +1,14 @@
 import { useMemo } from "react";
 import { create } from "zustand";
-import { errorMessage, ipc, isIpcError, type AddedProject, type Project } from "@/lib/ipc";
+import {
+  errorMessage,
+  ipc,
+  isIpcError,
+  type AddedProject,
+  type NewWorkspace,
+  type Project,
+  type SessionInfo,
+} from "@/lib/ipc";
 
 const KEYS = {
   selected: "sidebar.selectedWorkspace",
@@ -15,6 +23,10 @@ interface ProjectsState {
   projects: Project[];
   loaded: boolean;
   selectedWorkspaceId: string | null;
+  /** The project a new workspace is being composed for; takes over the center panel. */
+  composingProjectId: string | null;
+  /** Raw persisted UI state, for features that remember small things (see `remember`). */
+  ui: Record<string, string>;
   /** Projects are expanded unless listed here, so new ones start open. */
   collapsed: string[];
   /** Where the last project was created; the next one is offered the same parent. */
@@ -30,6 +42,18 @@ interface ProjectsState {
   remove: (id: string) => Promise<void>;
   move: (id: string, by: -1 | 1) => Promise<void>;
   select: (workspaceId: string | null) => void;
+  compose: (projectId: string | null) => void;
+  /**
+   * Create a worktree workspace and start its harness. Resolves to the new session, or to an
+   * error message — returned rather than stored, because the composer shows it inline.
+   */
+  createWorkspace: (request: NewWorkspace) => Promise<SessionInfo | { error: string }>;
+  /** Resolves to `"dirty"` when the workspace has uncommitted work and `force` was not given. */
+  deleteWorkspace: (
+    workspaceId: string,
+    force?: boolean,
+  ) => Promise<"deleted" | "dirty" | "failed">;
+  remember: (key: string, value: unknown) => void;
   toggleCollapsed: (projectId: string) => void;
   dismiss: () => void;
 }
@@ -75,6 +99,8 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
     projects: [],
     loaded: false,
     selectedWorkspaceId: null,
+    composingProjectId: null,
+    ui: {},
     collapsed: [],
     lastParentDir: null,
     error: null,
@@ -85,6 +111,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
         const [ui, projects] = await Promise.all([ipc.uiStateLoad(), ipc.projectsList()]);
         const selected = parse<string | null>(ui[KEYS.selected], null);
         set({
+          ui,
           projects,
           loaded: true,
           // The selection may point at something removed since it was saved.
@@ -144,6 +171,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
           state.selectedWorkspaceId && gone.has(state.selectedWorkspaceId)
             ? null
             : state.selectedWorkspaceId,
+        composingProjectId: state.composingProjectId === id ? null : state.composingProjectId,
       }));
       save(KEYS.selected, get().selectedWorkspaceId);
       save(KEYS.collapsed, get().collapsed);
@@ -165,9 +193,61 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
     },
 
     select(workspaceId) {
-      if (get().selectedWorkspaceId === workspaceId) return;
-      set({ selectedWorkspaceId: workspaceId });
+      if (get().selectedWorkspaceId === workspaceId) return set({ composingProjectId: null });
+      set({ selectedWorkspaceId: workspaceId, composingProjectId: null });
       save(KEYS.selected, workspaceId);
+    },
+
+    compose(projectId) {
+      set((state) => ({
+        composingProjectId: projectId,
+        // Composing inside a collapsed project would hide where the workspace will appear.
+        collapsed: state.collapsed.filter((id) => id !== projectId),
+      }));
+    },
+
+    async createWorkspace(request) {
+      try {
+        const { workspace, session } = await ipc.workspaceCreate(request);
+        set((state) => ({
+          projects: state.projects.map((project) =>
+            project.id === workspace.projectId
+              ? { ...project, workspaces: [...project.workspaces, workspace] }
+              : project,
+          ),
+          selectedWorkspaceId: workspace.id,
+          composingProjectId: null,
+        }));
+        save(KEYS.selected, workspace.id);
+        return session;
+      } catch (error) {
+        return { error: errorMessage(error) };
+      }
+    },
+
+    async deleteWorkspace(workspaceId, force = false) {
+      try {
+        await ipc.workspaceDelete(workspaceId, force);
+      } catch (error) {
+        if (isIpcError(error) && error.code === "worktree_dirty") return "dirty";
+        set({ error: errorMessage(error) });
+        return "failed";
+      }
+      set((state) => ({
+        projects: state.projects.map((project) => ({
+          ...project,
+          workspaces: project.workspaces.filter((workspace) => workspace.id !== workspaceId),
+        })),
+        selectedWorkspaceId:
+          state.selectedWorkspaceId === workspaceId ? null : state.selectedWorkspaceId,
+      }));
+      save(KEYS.selected, get().selectedWorkspaceId);
+      return "deleted";
+    },
+
+    remember(key, value) {
+      set((state) => ({ ui: { ...state.ui, [key]: JSON.stringify(value) } }));
+      save(key, value);
     },
 
     toggleCollapsed(projectId) {
@@ -196,4 +276,9 @@ export function useSelectedWorkspace() {
   const projects = useProjectsStore((state) => state.projects);
   const selected = useProjectsStore((state) => state.selectedWorkspaceId);
   return useMemo(() => findWorkspace(projects, selected), [projects, selected]);
+}
+
+/** A remembered value from persisted UI state (see `remember`), or `fallback`. */
+export function recall<T>(ui: Record<string, string>, key: string, fallback: T): T {
+  return parse(ui[key], fallback);
 }
