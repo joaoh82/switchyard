@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChangeSet, FileChange } from "@/lib/ipc";
 
 const core = vi.hoisted(() => ({
+  uiStateSave: vi.fn(),
   workspaceChanges: vi.fn(),
   workspaceDiff: vi.fn(),
   workspaceFile: vi.fn(),
@@ -60,6 +61,7 @@ describe("ChangesPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     core.workspaceWatch.mockResolvedValue(undefined);
+    core.uiStateSave.mockResolvedValue(undefined);
     core.openInEditor.mockResolvedValue(undefined);
     core.onWorkspaceFilesChanged.mockImplementation((handler) => {
       fileSystemChanged = handler;
@@ -73,7 +75,7 @@ describe("ChangesPanel", () => {
       committed: [change("src/old name.ts", { kind: "renamed", oldPath: "src/legacy.ts" })],
     });
     core.workspaceDiff.mockResolvedValue({ old: text("before"), new: text("after") });
-    useProjectsStore.setState({ selectedWorkspaceId: "w1", composingProjectId: null });
+    useProjectsStore.setState({ selectedWorkspaceId: "w1", composingProjectId: null, ui: {} });
     useChangesStore.setState({
       workspaceId: null,
       changes: null,
@@ -164,10 +166,10 @@ describe("ChangesPanel", () => {
     core.workspaceFiles.mockImplementation(async (_id: string, dir: string) =>
       dir === ""
         ? [
-            { name: "src", path: "src", isDir: true },
-            { name: "README.md", path: "README.md", isDir: false },
+            { name: "src", path: "src", isDir: true, ignored: false },
+            { name: "README.md", path: "README.md", isDir: false, ignored: false },
           ]
-        : [{ name: "main.rs", path: "src/main.rs", isDir: false }],
+        : [{ name: "main.rs", path: "src/main.rs", isDir: false, ignored: false }],
     );
     core.workspaceFile.mockResolvedValue(text("fn main() {}"));
     const user = await renderPanel();
@@ -180,8 +182,58 @@ describe("ChangesPanel", () => {
     await user.click(
       within(await screen.findByRole("treeitem", { name: "main.rs" })).getByRole("button"),
     );
-    expect(core.workspaceFiles).toHaveBeenCalledWith("w1", "src");
+    expect(core.workspaceFiles).toHaveBeenCalledWith("w1", "src", false);
     expect(await shown()).toEqual({ path: "src/main.rs", text: "fn main() {}" });
+  });
+
+  it("hides ignored files until asked, then shows them dimmed — contents included — and remembers", async () => {
+    core.workspaceFiles.mockImplementation(
+      async (_id: string, dir: string, showIgnored: boolean) => {
+        if (dir === "node_modules")
+          return [{ name: "react", path: "node_modules/react", isDir: true, ignored: false }];
+        const tracked = [{ name: "README.md", path: "README.md", isDir: false, ignored: false }];
+        return showIgnored
+          ? [
+              { name: ".git", path: ".git", isDir: true, ignored: true },
+              { name: "node_modules", path: "node_modules", isDir: true, ignored: true },
+              ...tracked,
+            ]
+          : tracked;
+      },
+    );
+    const user = await renderPanel();
+    await user.click(screen.getByRole("tab", { name: "Files" }));
+    await screen.findByRole("treeitem", { name: "README.md" });
+    expect(screen.queryByRole("treeitem", { name: "node_modules" })).not.toBeInTheDocument();
+
+    const toggle = screen.getByRole("button", { name: "ignored" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await user.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(core.uiStateSave).toHaveBeenCalledWith("files.showIgnored", "true");
+    const modules = await screen.findByRole("treeitem", { name: "node_modules" });
+    expect(within(modules).getByRole("button")).toHaveAttribute(
+      "title",
+      "node_modules — ignored by git",
+    );
+    expect(screen.getByRole("treeitem", { name: ".git" })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("treeitem", { name: "README.md" })).getByRole("button"),
+    ).toHaveAttribute("title", "README.md");
+
+    // What is inside an ignored folder is ignored too, even though the rules only name the folder.
+    await user.click(within(modules).getByRole("button"));
+    const react = await screen.findByRole("treeitem", { name: "react" });
+    expect(within(react).getByRole("button")).toHaveAttribute(
+      "title",
+      "node_modules/react — ignored by git",
+    );
+
+    await user.click(toggle);
+    await waitFor(() =>
+      expect(screen.queryByRole("treeitem", { name: "node_modules" })).not.toBeInTheDocument(),
+    );
   });
 
   it("opens the file in the editor — and the folder, for a deleted file", async () => {

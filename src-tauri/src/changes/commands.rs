@@ -76,16 +76,18 @@ pub async fn workspace_diff(
     .await
 }
 
-/// One folder of the workspace's file tree (`dir` is relative; empty for the root).
+/// One folder of the workspace's file tree (`dir` is relative; empty for the root). With
+/// `show_ignored`, `.git` and ignored entries are included and flagged.
 #[tauri::command]
 #[specta::specta]
 pub async fn workspace_files(
     app: AppHandle,
     workspace_id: String,
     dir: String,
+    show_ignored: bool,
 ) -> IpcResult<Vec<FileEntry>> {
     blocking(app, move |state| {
-        list_dir(&workspace(state, &workspace_id)?.1, &dir)
+        list_dir(&workspace(state, &workspace_id)?.1, &dir, show_ignored)
     })
     .await
 }

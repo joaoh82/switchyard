@@ -143,8 +143,8 @@ export const ipc = {
     scope: Scope,
   ) => unwrap(commands.workspaceDiff(workspaceId, change.path, change.oldPath, scope)),
   /** One folder of the file tree; `dir` is relative, empty for the root. */
-  workspaceFiles: (workspaceId: string, dir: string) =>
-    unwrap(commands.workspaceFiles(workspaceId, dir)),
+  workspaceFiles: (workspaceId: string, dir: string, showIgnored = false) =>
+    unwrap(commands.workspaceFiles(workspaceId, dir, showIgnored)),
   workspaceFile: (workspaceId: string, path: string) =>
     unwrap(commands.workspaceFile(workspaceId, path)),
   /** Watch one workspace's files (replacing any earlier watch); `null` stops. */

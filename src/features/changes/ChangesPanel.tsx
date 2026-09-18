@@ -2,13 +2,16 @@ import { useEffect, useState } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { hasCore, ipc } from "@/lib/ipc";
 import { useChangesStore } from "@/stores/changes";
-import { useProjectsStore } from "@/stores/projects";
+import { recall, useProjectsStore } from "@/stores/projects";
 import { ChangeList } from "./ChangeList";
 import { FileTree } from "./FileTree";
 import { Viewer } from "./Viewer";
 import { keyOf, titleOf } from "./viewing";
 
 type Tab = "changes" | "files";
+
+/** Remembered across restarts, for every workspace. */
+const SHOW_IGNORED = "files.showIgnored";
 
 /** Right panel: what changed in the selected workspace, its files, and a viewer for either. */
 export function ChangesPanel() {
@@ -20,6 +23,7 @@ export function ChangesPanel() {
   const error = useChangesStore((s) => s.error);
   const viewing = useChangesStore((s) => s.viewing);
   const [tab, setTab] = useState<Tab>("changes");
+  const showIgnored = useProjectsStore((s) => recall(s.ui, SHOW_IGNORED, false));
   // Expansion belongs to one file: opening another, or closing the viewer, returns to the panel.
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const expanded = viewing !== null && expandedKey === keyOf(viewing);
@@ -58,7 +62,7 @@ export function ChangesPanel() {
           {error}
         </p>
       ) : tab === "files" ? (
-        <FileTree workspaceId={workspaceId} revision={revision} />
+        <FileTree workspaceId={workspaceId} revision={revision} showIgnored={showIgnored} />
       ) : changes ? (
         <ChangeList changes={changes} />
       ) : (
@@ -90,6 +94,17 @@ export function ChangesPanel() {
             Files
           </button>
         </div>
+        {tab === "files" && (
+          <button
+            type="button"
+            aria-pressed={showIgnored}
+            title="Also show .git and files ignored by git (node_modules, build output…)"
+            onClick={() => useProjectsStore.getState().remember(SHOW_IGNORED, !showIgnored)}
+            className="ml-auto rounded px-2 py-0.5 text-[11px] text-ink-faint hover:bg-raised hover:text-ink aria-pressed:bg-raised aria-pressed:text-accent"
+          >
+            ignored
+          </button>
+        )}
       </header>
 
       {viewing && !expanded ? (

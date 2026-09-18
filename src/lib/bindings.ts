@@ -48,8 +48,11 @@ export const commands = {
 	workspaceDelete: (id: string, force: boolean) => typedError<null, IpcError>(__TAURI_INVOKE("workspace_delete", { id, force })),
 	workspaceChanges: (workspaceId: string) => typedError<ChangeSet, IpcError>(__TAURI_INVOKE("workspace_changes", { workspaceId })),
 	workspaceDiff: (workspaceId: string, path: string, oldPath: string | null, scope: Scope) => typedError<FileDiff, IpcError>(__TAURI_INVOKE("workspace_diff", { workspaceId, path, oldPath, scope })),
-	/**  One folder of the workspace's file tree (`dir` is relative; empty for the root). */
-	workspaceFiles: (workspaceId: string, dir: string) => typedError<FileEntry[], IpcError>(__TAURI_INVOKE("workspace_files", { workspaceId, dir })),
+	/**
+	 *  One folder of the workspace's file tree (`dir` is relative; empty for the root). With
+	 *  `show_ignored`, `.git` and ignored entries are included and flagged.
+	 */
+	workspaceFiles: (workspaceId: string, dir: string, showIgnored: boolean) => typedError<FileEntry[], IpcError>(__TAURI_INVOKE("workspace_files", { workspaceId, dir, showIgnored })),
 	workspaceFile: (workspaceId: string, path: string) => typedError<Content, IpcError>(__TAURI_INVOKE("workspace_file", { workspaceId, path })),
 	/**  Watch this workspace's files (replacing any previous watch); `None` stops watching. */
 	workspaceWatch: (workspaceId: string | null) => typedError<null, IpcError>(__TAURI_INVOKE("workspace_watch", { workspaceId })),
@@ -184,6 +187,8 @@ export type FileEntry = {
 	/**  Relative to the workspace root, with `/` separators. */
 	path: string,
 	isDir: boolean,
+	/**  Excluded by the ignore rules (or `.git` itself). Only ever listed on request. */
+	ignored: boolean,
 };
 
 export type HarnessDef = {

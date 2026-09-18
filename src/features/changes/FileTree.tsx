@@ -7,29 +7,37 @@ import { useChangesStore } from "@/stores/changes";
  * opened, so the size of the repository never matters. `revision` bumps on every file-system
  * signal and makes open folders reload.
  */
-export function FileTree({ workspaceId, revision }: { workspaceId: string; revision: number }) {
+interface TreeProps {
+  workspaceId: string;
+  revision: number;
+  /** Also list `.git` and what the ignore rules exclude, dimmed. */
+  showIgnored: boolean;
+}
+
+export function FileTree(props: TreeProps) {
   return (
     <ul role="tree" aria-label="Files" className="min-h-0 flex-1 overflow-y-auto py-1">
-      <Folder workspaceId={workspaceId} dir="" depth={0} revision={revision} />
+      <Folder {...props} dir="" depth={0} insideIgnored={false} />
     </ul>
   );
 }
 
-function Folder(props: { workspaceId: string; dir: string; depth: number; revision: number }) {
-  const { workspaceId, dir, depth, revision } = props;
+/** `insideIgnored`: the rules name an ignored *folder*, not its contents, so the flag is inherited. */
+function Folder(props: TreeProps & { dir: string; depth: number; insideIgnored: boolean }) {
+  const { workspaceId, dir, depth, revision, showIgnored } = props;
   const [entries, setEntries] = useState<FileEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let stale = false;
-    ipc.workspaceFiles(workspaceId, dir).then(
+    ipc.workspaceFiles(workspaceId, dir, showIgnored).then(
       (list) => !stale && (setEntries(list), setError(null)),
       (reason) => !stale && setError(errorMessage(reason)),
     );
     return () => {
       stale = true;
     };
-  }, [workspaceId, dir, revision]);
+  }, [workspaceId, dir, revision, showIgnored]);
 
   if (error) return <li className="px-3 py-1 text-red-400">{error}</li>;
   if (!entries) return null;
@@ -37,16 +45,15 @@ function Folder(props: { workspaceId: string; dir: string; depth: number; revisi
   return entries.map((entry) => (
     <Entry
       key={entry.path}
+      {...props}
       entry={entry}
-      workspaceId={workspaceId}
-      depth={depth}
-      revision={revision}
+      ignored={props.insideIgnored || entry.ignored}
     />
   ));
 }
 
-function Entry(props: { entry: FileEntry; workspaceId: string; depth: number; revision: number }) {
-  const { entry, depth } = props;
+function Entry(props: TreeProps & { entry: FileEntry; depth: number; ignored: boolean }) {
+  const { entry, depth, ignored } = props;
   const [open, setOpen] = useState(false);
   const selected = useChangesStore(
     (s) => s.viewing?.kind === "file" && s.viewing.path === entry.path,
@@ -70,8 +77,9 @@ function Entry(props: { entry: FileEntry; workspaceId: string; depth: number; re
         onClick={activate}
         style={{ paddingLeft: 12 + depth * 14 }}
         className={`flex h-6 w-full items-center gap-1.5 pr-2 text-left hover:bg-raised ${
-          selected ? "bg-raised text-ink" : "text-ink-muted"
+          selected ? "bg-raised text-ink" : ignored ? "text-ink-faint italic" : "text-ink-muted"
         }`}
+        title={ignored ? `${entry.path} — ignored by git` : entry.path}
       >
         <span aria-hidden className={`w-3 text-[9px] text-ink-faint ${open ? "rotate-90" : ""}`}>
           {entry.isDir ? "▶" : ""}
@@ -80,12 +88,7 @@ function Entry(props: { entry: FileEntry; workspaceId: string; depth: number; re
       </button>
       {entry.isDir && open && (
         <ul role="group">
-          <Folder
-            workspaceId={props.workspaceId}
-            dir={entry.path}
-            depth={depth + 1}
-            revision={props.revision}
-          />
+          <Folder {...props} dir={entry.path} depth={depth + 1} insideIgnored={ignored} />
         </ul>
       )}
     </li>
