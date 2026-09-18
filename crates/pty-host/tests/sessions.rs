@@ -66,6 +66,7 @@ fn shell(script: &str) -> LaunchPlan {
         env: vec![],
         clear_env: false,
         size: TermSize { cols: 80, rows: 24 },
+        labels: Default::default(),
     }
 }
 
@@ -280,6 +281,16 @@ fn sessions_are_listed_until_removed() {
         host.info(&a.id),
         Err(HostError::UnknownSession(_))
     ));
+}
+
+#[test]
+fn labels_are_stored_and_reported_back_untouched() {
+    let (host, _events) = host();
+    let mut plan = long_running();
+    plan.labels.insert("workspace".into(), "ws-42".into());
+    let session = host.spawn(plan).unwrap();
+    assert_eq!(session.labels["workspace"], "ws-42");
+    assert_eq!(host.list()[0].labels["workspace"], "ws-42");
 }
 
 #[test]

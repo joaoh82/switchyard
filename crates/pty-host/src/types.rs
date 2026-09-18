@@ -1,6 +1,7 @@
 //! The message types that cross the host boundary. Everything here is plain serialisable data:
 //! today it crosses a function call, later a local socket.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -71,6 +72,11 @@ pub struct LaunchPlan {
     pub clear_env: bool,
     #[serde(default)]
     pub size: TermSize,
+    /// Opaque metadata the host stores and reports back in [`SessionInfo`], never interpreting
+    /// it. Lets a client that reconnects — a reloaded webview today, the app attaching to a
+    /// daemon later — work out what each session belongs to.
+    #[serde(default)]
+    pub labels: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -101,6 +107,7 @@ pub struct SessionInfo {
     pub cwd: Option<PathBuf>,
     pub pid: Option<u32>,
     pub size: TermSize,
+    pub labels: BTreeMap<String, String>,
     pub state: SessionState,
     /// Milliseconds since the session last produced output (saturating). Drives "busy / waiting" indicators
     /// without anyone having to parse what the program printed.

@@ -37,3 +37,20 @@ impl From<HostError> for IpcError {
         Self::new(code, error.to_string())
     }
 }
+
+impl From<crate::git::GitError> for IpcError {
+    fn from(error: crate::git::GitError) -> Self {
+        let code = match &error {
+            crate::git::GitError::NotInstalled => "git_not_installed",
+            crate::git::GitError::Failed { .. } => "git_failed",
+            crate::git::GitError::Io(_) => "io",
+        };
+        Self::new(code, error.to_string())
+    }
+}
+
+impl From<crate::store::StoreError> for IpcError {
+    fn from(error: crate::store::StoreError) -> Self {
+        Self::new("database", error.to_string())
+    }
+}

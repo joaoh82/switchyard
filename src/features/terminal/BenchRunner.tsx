@@ -50,6 +50,7 @@ export function BenchRunner({ script, renderer }: { script: string; renderer: st
         program,
         args: [flag, script],
         cwd: null,
+        workspaceId: null,
         size: { cols: 120, rows: 40 },
       });
       if (cancelled) return unlisten();

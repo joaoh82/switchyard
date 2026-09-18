@@ -175,19 +175,27 @@ Decisions:
 
 ## Data model (SQLite)
 
+`switchyard.db` in the OS app-data directory (override with `SWITCHYARD_DATA_DIR`). Migrations are
+numbered SQL files in `src-tauri/migrations/`, applied in order and tracked with `user_version`; a
+database written by a newer build is refused rather than touched.
+
 ```
-projects    id, name, root_path (unique), default_branch, created_at, sort_order
-workspaces  id, project_id, name, slug, branch, base_branch, worktree_path,
-            kind ('local' | 'worktree'), status ('active' | 'archived' | 'missing'),
-            created_at, last_opened_at
-sessions    id, workspace_id, harness_id, model, effort, harness_session_id,
-            initial_prompt, state ('running' | 'exited'), exit_code,
-            started_at, ended_at, forked_from_session_id
-ui_state    key, value            -- panel sizes, last selection, per-project last-used picks
+projects    id, name, root_path (unique), sort_order, created_at
+workspaces  id, project_id → projects (cascade), kind ('local' | 'worktree'), name, path,
+            branch, base_branch, status ('active' | 'archived'), sort_order, created_at
+ui_state    key, value (JSON)   -- selection, collapsed projects, last-used picks
+sessions    (M6) id, workspace_id, harness_id, model, effort, harness_session_id, …
 ```
 
-`local` is a real row (`kind = 'local'`, `worktree_path = root_path`) so the rest of the code never
-special-cases it. Harness definitions are _not_ in the DB; they live in the settings file.
+`local` is a real row (`kind = 'local'`, `path = root_path`, exactly one per project) so the rest of
+the code never special-cases it. What is _checked out_ in a workspace is never stored: it is asked
+of git whenever projects are listed, because branches change behind our back. A project whose
+folder has vanished is flagged `missing`, not dropped — it comes back by itself if the folder does.
+Removing a project only forgets it; nothing on disk is touched. Harness definitions are _not_ in
+the DB; they live in the settings file.
+
+Live sessions are not in the database either — the PTY host owns them. Each carries a `workspace`
+label, which is how terminal tabs find their workspace after a webview reload.
 
 ## Cross-platform notes & risks
 

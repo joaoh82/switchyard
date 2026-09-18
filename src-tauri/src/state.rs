@@ -1,19 +1,24 @@
 use std::sync::{Arc, Mutex, PoisonError};
 
 use pty_host::PtyHost;
+use tauri::{AppHandle, Manager};
 
 use crate::env::ShellEnv;
+use crate::error::{IpcError, IpcResult};
+use crate::store::Store;
 
 /// Everything the commands share. Managed by Tauri, created in `setup`.
 pub struct AppState {
     pub host: PtyHost,
+    pub store: Store,
     env: Mutex<Option<Arc<ShellEnv>>>,
 }
 
 impl AppState {
-    pub fn new(host: PtyHost) -> Self {
+    pub fn new(host: PtyHost, store: Store) -> Self {
         Self {
             host,
+            store,
             env: Mutex::new(None),
         }
     }
@@ -33,4 +38,15 @@ impl AppState {
         *slot = Some(Arc::clone(&fresh));
         fresh
     }
+}
+
+/// Run `f` off the async runtime. Nearly every command blocks — on SQLite, on git, on the login
+/// shell — and must not stall the threads that serve the webview.
+pub async fn blocking<T: Send + 'static>(
+    app: AppHandle,
+    f: impl FnOnce(&AppState) -> IpcResult<T> + Send + 'static,
+) -> IpcResult<T> {
+    tauri::async_runtime::spawn_blocking(move || f(&app.state::<AppState>()))
+        .await
+        .map_err(|e| IpcError::internal(e.to_string()))?
 }

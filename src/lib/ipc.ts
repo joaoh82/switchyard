@@ -6,28 +6,37 @@ import { Channel, isTauri } from "@tauri-apps/api/core";
 import {
   commands,
   events,
+  type AddedProject,
   type AppInfo,
   type EnvInfo,
   type ExitInfo,
   type HostEvent,
   type IpcError,
+  type Project,
   type SessionId,
   type SessionInfo,
   type SpawnRequest,
   type TermSize,
+  type Workspace,
 } from "./bindings";
 
 export type {
+  AddedProject,
   AppInfo,
   EnvInfo,
   ExitInfo,
   HostEvent,
   IpcError,
+  Project,
   SessionId,
   SessionInfo,
   SpawnRequest,
   TermSize,
+  Workspace,
 };
+
+/** The label under which a session records the workspace it belongs to. */
+export const WORKSPACE_LABEL = "workspace";
 
 /** False in a plain browser tab and in unit tests, where there is no core to call. */
 export const hasCore = isTauri;
@@ -65,6 +74,15 @@ export const ipc = {
   appInfo: (): Promise<AppInfo> => commands.appInfo(),
   benchReport: async (report: string): Promise<void> => void (await commands.benchReport(report)),
   envInfo: (reload = false) => unwrap(commands.envInfo(reload)),
+
+  projectsList: () => unwrap(commands.projectsList()),
+  /** Rejects with code `not_a_git_repo` unless `initGit` is set. */
+  projectOpen: (path: string, initGit = false) => unwrap(commands.projectOpen(path, initGit)),
+  projectCreate: (name: string, parent: string) => unwrap(commands.projectCreate(name, parent)),
+  projectRemove: (id: string) => done(commands.projectRemove(id)),
+  projectsReorder: (orderedIds: string[]) => done(commands.projectsReorder(orderedIds)),
+  uiStateLoad: () => unwrap(commands.uiStateLoad()),
+  uiStateSave: (key: string, value: string) => done(commands.uiStateSave(key, value)),
 
   ptySpawn: (request: SpawnRequest) => unwrap(commands.ptySpawn(request)),
   ptyList: () => unwrap(commands.ptyList()),

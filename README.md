@@ -9,7 +9,7 @@ and workspaces on the left, the live agent terminal in the middle, and the files
 It is modeled after Superset and Conductor, with one hard requirement they don't meet:
 **Linux, macOS and Windows are all first-class from day one.**
 
-> Status: early development — M0 (scaffold) and M1 (terminal) done, M2 (projects) next. See the [roadmap](docs/05-roadmap.md).
+> Status: early development — M0 (scaffold), M1 (terminal) and M2 (projects) done; M3 (workspaces) next. See the [roadmap](docs/05-roadmap.md).
 
 ## Why "Switchyard"
 
@@ -33,12 +33,14 @@ Prerequisites: [Rust](https://rustup.rs) (stable), [Bun](https://bun.sh), `git`,
 ```sh
 just setup      # install dependencies
 just dev        # run the app with hot reload
-just check      # everything CI checks: formatting, lints, types, tests, stale bindings
+just check      # formatting, lints, types, all tests
 just test       # all tests (just test-rust / just test-web for one side)
 just fmt        # format everything
 just build      # installers for this OS, in target/release/bundle/
 just            # list every recipe
 ```
+
+Set `SWITCHYARD_DATA_DIR=/some/dir` to run against a throwaway database instead of your real one.
 
 `src/lib/bindings.ts` is generated from the Rust commands by `tauri-specta` — never edit it by hand.
 It is rewritten whenever the app runs in dev, `cargo test` runs, or `just bindings` is called, and CI fails if the

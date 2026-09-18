@@ -27,8 +27,8 @@ web:
 
 # --- check ----------------------------------------------------------------------------------
 
-# Everything CI checks: formatting, lints, types, all tests, stale bindings
-check: fmt-check lint typecheck test bindings-check
+# Formatting, lints, types and all tests. (CI additionally runs `bindings-check`.)
+check: fmt-check lint typecheck test
 
 # All tests, Rust and frontend
 test: test-rust test-web
@@ -50,7 +50,7 @@ lint:
     cargo clippy --workspace --all-targets -- -D warnings
     bun run lint
 
-# Clippy for the Windows target, from any OS (needs: rustup target add x86_64-pc-windows-msvc)
+# Clippy the PTY host for Windows from any OS (the app crate needs MSVC for SQLite; CI covers it)
 lint-windows:
     bun run lint:windows
 
@@ -72,7 +72,7 @@ fmt-check:
 bindings:
     bun run bindings
 
-# Fail if the checked-in bindings are stale
+# Fail if regenerated bindings differ from what is staged/committed — run before pushing
 bindings-check: bindings
     git diff --exit-code -- src/lib/bindings.ts
 

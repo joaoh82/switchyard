@@ -1,11 +1,13 @@
 import { useEffect } from "react";
 import { Group, Panel, Separator, useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import { ChangesPanel } from "@/features/changes/ChangesPanel";
+import { openProjectFromDisk } from "@/features/sidebar/actions";
 import { Sidebar } from "@/features/sidebar/Sidebar";
 import { WorkspacePanel } from "@/features/workspace/WorkspacePanel";
 import { isModKey, shortcutKey } from "@/lib/platform";
 import { useAppStore } from "@/stores/app";
 import { useLayoutStore, type SidePanel } from "@/stores/layout";
+import { useProjectsStore } from "@/stores/projects";
 import { useTerminalStore } from "@/stores/terminals";
 import { StatusBar } from "./StatusBar";
 
@@ -46,18 +48,22 @@ export function AppShell() {
 
   useEffect(() => void useAppStore.getState().load().catch(console.error), []);
 
-  // Mod+B toggles the left panel, Mod+Alt+B the right; Mod+T opens a shell tab and Mod+W closes
-  // the active one. Always behind Mod
-  // (see `isModKey`), so the program in the terminal never loses a key.
+  // Mod+B / Mod+Alt+B toggle the side panels, Mod+O opens a project, Mod+T and Mod+W open and
+  // close terminal tabs in the selected workspace. Always behind Mod (see `isModKey`), so the
+  // program in the terminal never loses a key.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!isModKey(event)) return;
       const key = shortcutKey(event);
+      const workspaceId = useProjectsStore.getState().selectedWorkspaceId;
+      const terminals = useTerminalStore.getState();
       if (key === "b") toggle(event.altKey ? "right" : "left");
-      else if (key === "t" && !event.altKey) void useTerminalStore.getState().open();
-      else if (key === "w" && !event.altKey) {
-        const { activeId, close } = useTerminalStore.getState();
-        if (activeId) void close(activeId);
+      else if (event.altKey) return;
+      else if (key === "o") void openProjectFromDisk();
+      else if (key === "t" && workspaceId) void terminals.open(workspaceId);
+      else if (key === "w" && workspaceId) {
+        const active = terminals.active[workspaceId];
+        if (active) void terminals.close(active);
       } else return;
       event.preventDefault();
     };

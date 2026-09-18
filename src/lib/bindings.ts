@@ -10,6 +10,15 @@ export const commands = {
 	appInfo: () => __TAURI_INVOKE<AppInfo>("app_info"),
 	/**  Receives the result of a `SWITCHYARD_BENCH` run, prints it as one line of JSON and quits. */
 	benchReport: (report: string) => __TAURI_INVOKE<void>("bench_report", { report }),
+	projectsList: () => typedError<Project[], IpcError>(__TAURI_INVOKE("projects_list")),
+	/**  Add the repository containing `path`. Fails with `not_a_git_repo` unless `init_git` is set. */
+	projectOpen: (path: string, initGit: boolean) => typedError<AddedProject, IpcError>(__TAURI_INVOKE("project_open", { path, initGit })),
+	projectCreate: (name: string, parent: string) => typedError<AddedProject, IpcError>(__TAURI_INVOKE("project_create", { name, parent })),
+	/**  Forget a project. Files on disk are never touched. */
+	projectRemove: (id: string) => typedError<null, IpcError>(__TAURI_INVOKE("project_remove", { id })),
+	projectsReorder: (orderedIds: string[]) => typedError<null, IpcError>(__TAURI_INVOKE("projects_reorder", { orderedIds })),
+	uiStateLoad: () => typedError<{ [key in string]: string }, IpcError>(__TAURI_INVOKE("ui_state_load")),
+	uiStateSave: (key: string, value: string) => typedError<null, IpcError>(__TAURI_INVOKE("ui_state_save", { key, value })),
 	envInfo: (reload: boolean) => typedError<EnvInfo, IpcError>(__TAURI_INVOKE("env_info", { reload })),
 	ptySpawn: (request: SpawnRequest) => typedError<SessionInfo, IpcError>(__TAURI_INVOKE("pty_spawn", { request })),
 	/**  Stream a session into `output`: first a snapshot that repaints the terminal, then live bytes. */
@@ -29,6 +38,14 @@ export const events = {
 };
 
 /* Types */
+/**  The result of adding a project: it may have been known already. */
+export type AddedProject = {
+	project: Project,
+	alreadyKnown: boolean,
+	/**  Set when the chosen folder was inside a repository and its root was added instead. */
+	openedRootInstead: boolean,
+};
+
 /**  Static facts about the running app, shown in the UI and useful in bug reports. */
 export type AppInfo = {
 	name: string,
@@ -75,6 +92,14 @@ export type ExitInfo = {
 	signal: string | null,
 };
 
+export type HeadInfo = {
+	/**  Branch name, or the abbreviated commit when detached. */
+	label: string,
+	detached: boolean,
+	/**  The branch has no commits yet. */
+	unborn: boolean,
+};
+
 /**  Host-wide notifications, delivered to the sink given to [`crate::PtyHost::new`]. */
 export type HostEvent = 
 /**  The session's process ended and all of its output has been delivered. */
@@ -87,6 +112,18 @@ export type HostEvent =
 export type IpcError = {
 	code: string,
 	message: string,
+};
+
+export type Project = {
+	id: string,
+	name: string,
+	rootPath: string,
+	/**
+	 *  The folder is gone (deleted, moved, or on an unmounted drive). The project is kept so it
+	 *  reappears by itself if the folder does; the user can remove it.
+	 */
+	missing: boolean,
+	workspaces: Workspace[],
 };
 
 /**  Emitted for every [`HostEvent`]. */
@@ -111,6 +148,7 @@ export type SessionInfo = {
 	cwd: string | null,
 	pid: number | null,
 	size: TermSize,
+	labels: { [key in string]: string },
 	state: SessionState,
 	/**
 	 *  Milliseconds since the session last produced output (saturating). Drives "busy / waiting" indicators
@@ -125,8 +163,13 @@ export type SpawnRequest = {
 	/**  Program to run. `None` starts the user's shell. */
 	program: string | null,
 	args?: string[],
-	/**  Working directory. `None` means the home directory. */
+	/**  Working directory. `None` means the home directory. Ignored when `workspace_id` is set. */
 	cwd: string | null,
+	/**
+	 *  Run inside this workspace: the core looks up its folder (the webview never supplies
+	 *  paths for this) and labels the session so it can be matched back to the workspace.
+	 */
+	workspaceId: string | null,
 	size: TermSize,
 };
 
@@ -134,6 +177,22 @@ export type TermSize = {
 	cols: number,
 	rows: number,
 };
+
+export type Workspace = {
+	id: string,
+	projectId: string,
+	kind: WorkspaceKind,
+	name: string,
+	path: string,
+	/**  What is checked out right now, asked of git at listing time. */
+	head: HeadInfo | null,
+};
+
+export type WorkspaceKind = 
+/**  The project's own checkout. Always present, never deletable. */
+"local" | 
+/**  A git worktree on its own branch. */
+"worktree";
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

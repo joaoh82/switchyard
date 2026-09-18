@@ -6,7 +6,10 @@
 mod commands;
 mod env;
 mod error;
+mod git;
+mod projects;
 mod state;
+mod store;
 mod terminal;
 
 pub use env::print_env_and_exit_if_asked;
@@ -23,6 +26,13 @@ fn ipc_builder() -> Builder<tauri::Wry> {
         .commands(collect_commands![
             commands::app_info,
             commands::bench_report,
+            projects::commands::projects_list,
+            projects::commands::project_open,
+            projects::commands::project_create,
+            projects::commands::project_remove,
+            projects::commands::projects_reorder,
+            projects::commands::ui_state_load,
+            projects::commands::ui_state_save,
             terminal::env_info,
             terminal::pty_spawn,
             terminal::pty_attach,
@@ -58,6 +68,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
@@ -66,7 +77,15 @@ pub fn run() {
             let host = pty_host::PtyHost::new(std::sync::Arc::new(move |event| {
                 let _ = terminal::PtyHostEvent(event).emit(&handle);
             }));
-            app.manage(state::AppState::new(host));
+            // `SWITCHYARD_DATA_DIR` keeps experiments and tests away from the real database.
+            let data_dir = match std::env::var_os("SWITCHYARD_DATA_DIR") {
+                Some(dir) if !dir.is_empty() => std::path::PathBuf::from(dir),
+                _ => app.path().app_data_dir()?,
+            };
+            let database = data_dir.join("switchyard.db");
+            let store = store::Store::open(&database)
+                .map_err(|e| format!("cannot open {}: {e}", database.display()))?;
+            app.manage(state::AppState::new(host, store));
 
             // Warm the login-shell environment now, so the first terminal doesn't wait for it.
             let handle = app.handle().clone();

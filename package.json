@@ -14,13 +14,14 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint:windows": "cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings",
+    "lint:windows": "cargo clippy -p pty-host --all-targets --target x86_64-pc-windows-msvc -- -D warnings",
     "bindings": "cargo test -p switchyard export_bindings",
     "check": "bun run format:check && bun run lint && bun run typecheck && bun run test"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.3",
+    "@tauri-apps/plugin-dialog": "^2.7.3",
     "@tauri-apps/plugin-opener": "^2.5.5",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-unicode11": "^0.9.0",

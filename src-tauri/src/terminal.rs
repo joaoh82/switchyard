@@ -7,11 +7,11 @@ use pty_host::{AttachmentId, HostError, HostEvent, LaunchPlan, SessionId, Sessio
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::ipc::{Channel, InvokeResponseBody, IpcResponse};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 
 use crate::env::{EnvSource, ShellEnv};
 use crate::error::{IpcError, IpcResult};
-use crate::state::AppState;
+use crate::state::{blocking, AppState};
 
 /// Emitted for every [`HostEvent`].
 #[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
@@ -39,10 +39,16 @@ pub struct SpawnRequest {
     pub program: Option<String>,
     #[serde(default)]
     pub args: Vec<String>,
-    /// Working directory. `None` means the home directory.
+    /// Working directory. `None` means the home directory. Ignored when `workspace_id` is set.
     pub cwd: Option<String>,
+    /// Run inside this workspace: the core looks up its folder (the webview never supplies
+    /// paths for this) and labels the session so it can be matched back to the workspace.
+    pub workspace_id: Option<String>,
     pub size: TermSize,
 }
+
+/// Label carrying the id of the workspace a session belongs to.
+pub const WORKSPACE_LABEL: &str = "workspace";
 
 /// What the launch environment looks like, for the status bar and for bug reports.
 #[derive(Debug, Clone, Serialize, Type)]
@@ -73,13 +79,27 @@ impl From<&ShellEnv> for EnvInfo {
 #[specta::specta]
 pub async fn pty_spawn(app: AppHandle, request: SpawnRequest) -> IpcResult<SessionInfo> {
     // Resolving the environment and forking are both blocking.
-    tauri::async_runtime::spawn_blocking(move || {
-        let state = app.state::<AppState>();
-        let plan = launch_plan(&state.env(), request)?;
+    blocking(app, move |state| {
+        let mut request = request;
+        let mut labels = std::collections::BTreeMap::new();
+        if let Some(id) = request.workspace_id.clone() {
+            let workspace = state.store.workspace(&id)?.ok_or_else(|| {
+                IpcError::new("unknown_workspace", "That workspace no longer exists.")
+            })?;
+            if !std::path::Path::new(&workspace.path).is_dir() {
+                return Err(IpcError::new(
+                    "workspace_missing",
+                    format!("{} does not exist any more.", workspace.path),
+                ));
+            }
+            request.cwd = Some(workspace.path);
+            labels.insert(WORKSPACE_LABEL.to_owned(), id);
+        }
+        let mut plan = launch_plan(&state.env(), request)?;
+        plan.labels = labels;
         Ok(state.host.spawn(plan)?)
     })
     .await
-    .map_err(|e| IpcError::internal(e.to_string()))?
 }
 
 /// Stream a session into `output`: first a snapshot that repaints the terminal, then live bytes.
@@ -149,8 +169,7 @@ pub async fn pty_list(state: State<'_, AppState>) -> IpcResult<Vec<SessionInfo>>
 #[tauri::command]
 #[specta::specta]
 pub async fn env_info(app: AppHandle, reload: bool) -> IpcResult<EnvInfo> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let state = app.state::<AppState>();
+    blocking(app, move |state| {
         let env = if reload {
             state.reload_env()
         } else {
@@ -159,7 +178,6 @@ pub async fn env_info(app: AppHandle, reload: bool) -> IpcResult<EnvInfo> {
         Ok(EnvInfo::from(&*env))
     })
     .await
-    .map_err(|e| IpcError::internal(e.to_string()))?
 }
 
 /// Turn a request into a concrete plan: pick the program, find it on the *user's* `PATH`, and
@@ -202,6 +220,7 @@ fn launch_plan(env: &Arc<ShellEnv>, request: SpawnRequest) -> IpcResult<LaunchPl
         // The resolved environment is complete; nothing from the GUI process should leak in.
         clear_env: env.source == EnvSource::LoginShell,
         size: request.size,
+        labels: Default::default(),
     })
 }
 
@@ -239,6 +258,7 @@ mod tests {
             program: program.map(str::to_owned),
             args: vec!["--flag".into()],
             cwd: None,
+            workspace_id: None,
             size: TermSize { cols: 80, rows: 24 },
         }
     }

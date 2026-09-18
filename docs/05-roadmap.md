@@ -31,13 +31,18 @@ numbers (frame times while a harness streams, WebGL vs DOM), before starting M2.
 _Result:_ **go** on Linux — see [07-terminal-benchmarks](07-terminal-benchmarks.md). macOS and Windows
 are covered by CI (build + PTY integration tests) but still need a hands-on pass and benchmark rows.
 
-## M2 — Projects & sidebar
+## M2 — Projects & sidebar ✅
 
 - SQLite store + migrations. Open project / create project (with `git init` + initial commit).
 - Sidebar tree with `local`. Selecting `local` opens a shell tab at the repo root.
 - Persist selection, panel sizes, expansion state.
 
 _Exit:_ add, reorder and remove projects; restart the app and everything is where you left it.
+
+_Notes:_ reordering is "Move up / Move down" in the project menu for now — HTML5 drag-and-drop in
+Tauri webviews needs the window's native drop handling disabled, which is better decided together
+with dropping files onto terminals. Sessions carry a `workspace` label in the PTY host, which is how
+tabs find their workspace again after a webview reload (and, later, after attaching to the daemon).
 
 ## M3 — Workspaces (the core loop)
 

@@ -1,11 +1,12 @@
 import { formatShortcut } from "@/lib/platform";
-import { QUICK_LAUNCH } from "./quickLaunch";
 import { useTerminalStore, type TerminalTab } from "@/stores/terminals";
+import { QUICK_LAUNCH } from "./quickLaunch";
 
-export function TerminalTabs() {
-  const tabs = useTerminalStore((s) => s.tabs);
-  const activeId = useTerminalStore((s) => s.activeId);
+export function TerminalTabs({ workspaceId }: { workspaceId: string }) {
+  const allTabs = useTerminalStore((s) => s.tabs);
+  const activeId = useTerminalStore((s) => s.active[workspaceId]);
   const open = useTerminalStore((s) => s.open);
+  const tabs = allTabs.filter((tab) => tab.workspaceId === workspaceId);
 
   return (
     <div className="flex h-9 shrink-0 items-stretch border-b border-line bg-surface">
@@ -18,7 +19,7 @@ export function TerminalTabs() {
         type="button"
         title={`New shell (${formatShortcut("T")})`}
         aria-label="New shell"
-        onClick={() => void open()}
+        onClick={() => void open(workspaceId)}
         className="px-3 text-ink-muted hover:bg-raised hover:text-ink"
       >
         +
@@ -28,7 +29,7 @@ export function TerminalTabs() {
           <button
             key={program}
             type="button"
-            onClick={() => void open(program)}
+            onClick={() => void open(workspaceId, program)}
             className="rounded px-2 py-0.5 text-[11px] text-ink-faint hover:bg-raised hover:text-ink"
           >
             {program}

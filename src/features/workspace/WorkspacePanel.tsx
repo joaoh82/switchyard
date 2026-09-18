@@ -3,19 +3,16 @@ import { QUICK_LAUNCH } from "@/features/terminal/quickLaunch";
 import { TerminalTabs } from "@/features/terminal/TerminalTabs";
 import { TerminalView } from "@/features/terminal/TerminalView";
 import { useTerminalSessions } from "@/features/terminal/useTerminalSessions";
+import type { Project, Workspace } from "@/lib/ipc";
 import { useAppStore } from "@/stores/app";
+import { useProjectsStore, useSelectedWorkspace } from "@/stores/projects";
 import { useTerminalStore } from "@/stores/terminals";
 
-/**
- * Center panel. Until projects and workspaces exist (M2/M3) this is a scratch terminal area:
- * tabs of PTY sessions rooted at the home directory.
- */
+/** Center panel: the terminals of the selected workspace. (The composer arrives in M3.) */
 export function WorkspacePanel() {
   useTerminalSessions();
   const dev = useAppStore((s) => s.info?.dev);
-  const activeId = useTerminalStore((s) => s.activeId);
-  const error = useTerminalStore((s) => s.error);
-  const dismissError = useTerminalStore((s) => s.dismissError);
+  const selection = useSelectedWorkspace();
 
   if (dev?.bench) {
     return (
@@ -24,10 +21,32 @@ export function WorkspacePanel() {
       </main>
     );
   }
-
   return (
     <main aria-label="Workspace" className="flex h-full flex-col bg-canvas">
-      <TerminalTabs />
+      {selection ? (
+        <WorkspaceTerminals {...selection} rendererOverride={dev?.renderer} />
+      ) : (
+        <Welcome />
+      )}
+    </main>
+  );
+}
+
+function WorkspaceTerminals(props: {
+  project: Project;
+  workspace: Workspace;
+  rendererOverride?: string | null;
+}) {
+  const { project, workspace } = props;
+  const activeId = useTerminalStore((s) => s.active[workspace.id]);
+  const error = useTerminalStore((s) => s.error);
+  const dismissError = useTerminalStore((s) => s.dismissError);
+  const open = useTerminalStore((s) => s.open);
+  const head = workspace.head;
+
+  return (
+    <>
+      <TerminalTabs workspaceId={workspace.id} />
       {error && (
         <div
           role="alert"
@@ -43,36 +62,73 @@ export function WorkspacePanel() {
         {/* Only the active terminal is mounted; the others keep running in the core and are
             repainted from a snapshot when they come back. `key` forces a fresh view per session. */}
         {activeId ? (
-          <TerminalView key={activeId} sessionId={activeId} rendererOverride={dev?.renderer} />
+          <TerminalView
+            key={activeId}
+            sessionId={activeId}
+            rendererOverride={props.rendererOverride}
+          />
         ) : (
-          <EmptyState />
+          <Centered>
+            <p className="text-ink-muted">Nothing running in this workspace.</p>
+            <LaunchButtons onLaunch={(program) => void open(workspace.id, program)} />
+          </Centered>
         )}
       </div>
-    </main>
+      <footer className="flex h-6 shrink-0 items-center gap-2 border-t border-line bg-surface px-3 font-mono text-[11px] whitespace-nowrap text-ink-faint *:shrink-0">
+        <span className="text-ink-muted">{project.name}</span>
+        <span>/</span>
+        <span className="text-ink-muted">{workspace.name}</span>
+        {head && (
+          <span title={head.detached ? "Detached HEAD" : head.unborn ? "No commits yet" : "Branch"}>
+            · {head.detached ? `@${head.label}` : head.label}
+            {head.unborn ? " (no commits yet)" : ""}
+          </span>
+        )}
+        <span className="ml-auto min-w-0 shrink! truncate select-text" title={workspace.path}>
+          {workspace.path}
+        </span>
+      </footer>
+    </>
   );
 }
 
-function EmptyState() {
-  const open = useTerminalStore((s) => s.open);
+function Welcome() {
+  const hasProjects = useProjectsStore((s) => s.projects.length > 0);
   return (
-    <div className="flex h-full items-center justify-center">
-      <div className="text-center">
-        <img src="/icon.svg" alt="" className="mx-auto mb-4 size-16 opacity-90" />
-        <h1 className="text-lg font-semibold">Switchyard</h1>
-        <p className="mt-1 text-ink-muted">Every agent on its own track.</p>
-        <div className="mt-5 flex flex-wrap justify-center gap-2">
-          {[undefined, ...QUICK_LAUNCH].map((program) => (
-            <button
-              key={program ?? "shell"}
-              type="button"
-              onClick={() => void open(program)}
-              className="rounded border border-line px-3 py-1 text-ink-muted hover:border-accent hover:text-ink"
-            >
-              {program ?? "shell"}
-            </button>
-          ))}
-        </div>
-      </div>
+    <Centered>
+      <img src="/icon.svg" alt="" className="mx-auto mb-4 size-16 opacity-90" />
+      <h1 className="text-lg font-semibold">Switchyard</h1>
+      <p className="mt-1 text-ink-muted">Every agent on its own track.</p>
+      <p className="mt-5 text-ink-faint">
+        {hasProjects
+          ? "Pick a workspace on the left to start working."
+          : "Add a project on the left to get started."}
+      </p>
+    </Centered>
+  );
+}
+
+function LaunchButtons({ onLaunch }: { onLaunch: (program?: string) => void }) {
+  return (
+    <div className="mt-4 flex flex-wrap justify-center gap-2">
+      {[undefined, ...QUICK_LAUNCH].map((program) => (
+        <button
+          key={program ?? "shell"}
+          type="button"
+          onClick={() => onLaunch(program)}
+          className="rounded border border-line px-3 py-1 text-ink-muted hover:border-accent hover:text-ink"
+        >
+          {program ?? "shell"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Centered({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex h-full items-center justify-center p-6">
+      <div className="text-center">{children}</div>
     </div>
   );
 }

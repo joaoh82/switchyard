@@ -156,6 +156,7 @@ impl Session {
             cwd: self.plan.cwd.clone(),
             pid: self.pid,
             size: view.size,
+            labels: self.plan.labels.clone(),
             state: view.state.clone(),
             idle_ms: u32::try_from(view.last_output.elapsed().as_millis()).unwrap_or(u32::MAX),
         }
