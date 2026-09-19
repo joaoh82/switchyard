@@ -122,6 +122,15 @@ jobs:
           git clone git@github.com:joaoh82/homebrew-yardsort.git "$RUNNER_TEMP/tap"
           scripts/homebrew-render.sh "$version" "$RUNNER_TEMP/tap/Casks/yardsort.rb"
 
+          cd "$RUNNER_TEMP/tap"
+          git add Casks/yardsort.rb
+          if git diff --cached --quiet; then
+            echo "The tap is already at $version."
+            exit 0
+          fi
+          # Commit locally first: `brew tap` clones the tap, so it only sees what is committed.
+          git -c user.name="Yardsort release bot" -c user.email="noreply@github.com" commit -m "Yardsort $version"
+
           # Prove it before anyone is told: style, audit, a real install, and Gatekeeper's verdict.
           brew tap joaoh82/yardsort "$RUNNER_TEMP/tap"
           brew style --cask joaoh82/yardsort/yardsort
@@ -132,11 +141,4 @@ jobs:
           spctl --assess --type execute --verbose /Applications/Yardsort.app
           test "$(defaults read /Applications/Yardsort.app/Contents/Info CFBundleShortVersionString)" = "$version"
 
-          cd "$RUNNER_TEMP/tap"
-          git add Casks/yardsort.rb
-          if git diff --cached --quiet; then
-            echo "The tap is already at $version."
-            exit 0
-          fi
-          git -c user.name="Yardsort release bot" -c user.email="noreply@github.com" commit -m "Yardsort $version"
           git push origin HEAD:main
