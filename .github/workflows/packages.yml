@@ -1,0 +1,142 @@
+name: Package managers
+
+# Publishes an existing GitHub release to the package managers. Called by the Release workflow
+# after a release goes public; run it by hand (Actions -> Package managers -> Run workflow) to
+# publish or re-publish any release, for example once a missing credential has been added.
+# Every job skips itself, with a warning, when its credential is not configured.
+# See docs/releasing.md.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish, e.g. v0.3.1
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ inputs.tag }}
+
+jobs:
+  # Arch User Repository: `yardsort-bin`, repackaging the release's .deb.
+  aur:
+    name: AUR
+    if: ${{ !contains(inputs.tag, '-') }}
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    steps:
+      - name: Install tools
+        run: pacman -Syu --noconfirm --needed git openssh curl
+
+      # The packaging scripts come from the commit this workflow runs at — not from the tag —
+      # so an older release can be published with today's scripts.
+      - uses: actions/checkout@v5
+
+      - name: Render, build and publish the package
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "::warning::No AUR_SSH_PRIVATE_KEY secret: the AUR package was not updated. See docs/releasing.md."
+            exit 0
+          fi
+          version="${TAG#v}"
+
+          # makepkg refuses to run as root.
+          useradd --create-home builder
+          install -d -o builder -g builder /work
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          run() { sudo -u builder --preserve-env=HOME env HOME=/home/builder "$@"; }
+
+          run install -d -m 700 /home/builder/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" | run tee /home/builder/.ssh/aur >/dev/null
+          run chmod 600 /home/builder/.ssh/aur
+          # The AUR's published host keys, so nothing is trusted on first use.
+          run tee /home/builder/.ssh/known_hosts >/dev/null <<'KEYS'
+          aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN
+          KEYS
+          export GIT_SSH_COMMAND="ssh -i /home/builder/.ssh/aur -o IdentitiesOnly=yes -o UserKnownHostsFile=/home/builder/.ssh/known_hosts"
+
+          # A key that no AUR account knows yet is a setup step still to do, not a broken release.
+          if ! run env GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git ls-remote ssh://aur@aur.archlinux.org/yardsort-bin.git >/dev/null 2>/tmp/aur-auth; then
+            if grep -q "Permission denied" /tmp/aur-auth; then
+              echo "::warning::The AUR does not accept the deploy key yet — register its public half on the AUR account (docs/releasing.md). The AUR package was not updated."
+              exit 0
+            fi
+            cat /tmp/aur-auth; exit 1
+          fi
+
+          run env GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git clone ssh://aur@aur.archlinux.org/yardsort-bin.git /work/aur
+          run scripts/aur-render.sh "$version" /work/aur
+
+          # Prove the package actually builds before anyone is told about it.
+          (cd /work/aur && run makepkg --force --nodeps --noconfirm)
+          run bash -c 'cd /work/aur && pkg=$(ls yardsort-bin-*.pkg.tar.* | head -1) && bsdtar -tf "$pkg" | grep -qx usr/bin/yardsort'
+
+          cd /work/aur
+          run git add PKGBUILD .SRCINFO
+          if run git diff --cached --quiet; then
+            echo "The AUR package is already at $version."
+            exit 0
+          fi
+          run git -c user.name="Yardsort release bot" -c user.email="noreply@github.com" commit -m "Update to $version"
+          run env GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git push origin HEAD:master
+
+  # Homebrew: the cask in the joaoh82/homebrew-yardsort tap. Runs on macOS so that the new cask
+  # is really installed, and Gatekeeper really asked, before it is pushed.
+  homebrew:
+    name: Homebrew
+    if: ${{ !contains(inputs.tag, '-') }}
+    runs-on: macos-latest
+    steps:
+      # The packaging scripts come from the commit this workflow runs at — not from the tag —
+      # so an older release can be published with today's scripts.
+      - uses: actions/checkout@v5
+
+      - name: Render, install-test and publish the cask
+        env:
+          HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: |
+          set -euo pipefail
+          if [ -z "$HOMEBREW_TAP_DEPLOY_KEY" ]; then
+            echo "::warning::No HOMEBREW_TAP_DEPLOY_KEY secret: the Homebrew tap was not updated. See docs/releasing.md."
+            exit 0
+          fi
+          version="${TAG#v}"
+
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$HOMEBREW_TAP_DEPLOY_KEY" > ~/.ssh/tap && chmod 600 ~/.ssh/tap
+          # GitHub's published host key, so nothing is trusted on first use.
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/tap -o IdentitiesOnly=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+
+          git clone git@github.com:joaoh82/homebrew-yardsort.git "$RUNNER_TEMP/tap"
+          scripts/homebrew-render.sh "$version" "$RUNNER_TEMP/tap/Casks/yardsort.rb"
+
+          # Prove it before anyone is told: style, audit, a real install, and Gatekeeper's verdict.
+          brew tap joaoh82/yardsort "$RUNNER_TEMP/tap"
+          brew style --cask joaoh82/yardsort/yardsort
+          brew audit --cask --strict --online joaoh82/yardsort/yardsort
+          brew install --cask joaoh82/yardsort/yardsort
+          test -d /Applications/Yardsort.app
+          codesign --verify --deep --strict /Applications/Yardsort.app
+          spctl --assess --type execute --verbose /Applications/Yardsort.app
+          test "$(defaults read /Applications/Yardsort.app/Contents/Info CFBundleShortVersionString)" = "$version"
+
+          cd "$RUNNER_TEMP/tap"
+          git add Casks/yardsort.rb
+          if git diff --cached --quiet; then
+            echo "The tap is already at $version."
+            exit 0
+          fi
+          git -c user.name="Yardsort release bot" -c user.email="noreply@github.com" commit -m "Yardsort $version"
+          git push origin HEAD:main

@@ -169,69 +169,12 @@ jobs:
           gh release edit "$TAG" --draft=false
           gh release view "$TAG" --json url,assets -q '.url, (.assets[] | "  " + .name)'
 
-  # Publish the release to the Arch User Repository as `yardsort-bin`. Skipped for pre-releases,
-  # and when no AUR deploy key is configured. See docs/releasing.md.
-  aur:
-    name: Publish to the AUR
+  # Tell the package managers (AUR, Homebrew, winget). Its own workflow, so that it can also be
+  # run by hand for a release that already exists, without rebuilding anything.
+  packages:
+    name: Package managers
     needs: publish
-    if: ${{ !contains(inputs.tag || github.ref_name, '-') }}
-    runs-on: ubuntu-24.04
-    container: archlinux:base-devel
-    steps:
-      - name: Install tools
-        run: pacman -Syu --noconfirm --needed git openssh curl
-
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ env.TAG }}
-
-      - name: Render, build and publish the package
-        env:
-          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
-            echo "::warning::No AUR_SSH_PRIVATE_KEY secret: the AUR package was not updated. See docs/releasing.md."
-            exit 0
-          fi
-          version="${TAG#v}"
-
-          # makepkg refuses to run as root.
-          useradd --create-home builder
-          install -d -o builder -g builder /work
-          chown -R builder:builder "$GITHUB_WORKSPACE"
-          run() { sudo -u builder --preserve-env=HOME env HOME=/home/builder "$@"; }
-
-          run install -d -m 700 /home/builder/.ssh
-          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" | run tee /home/builder/.ssh/aur >/dev/null
-          run chmod 600 /home/builder/.ssh/aur
-          # The AUR's published host keys, so nothing is trusted on first use.
-          run tee /home/builder/.ssh/known_hosts >/dev/null <<'KEYS'
-          aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN
-          KEYS
-          export GIT_SSH_COMMAND="ssh -i /home/builder/.ssh/aur -o IdentitiesOnly=yes -o UserKnownHostsFile=/home/builder/.ssh/known_hosts"
-
-          # A key that no AUR account knows yet is a setup step still to do, not a broken release.
-          if ! run env GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git ls-remote ssh://aur@aur.archlinux.org/yardsort-bin.git >/dev/null 2>/tmp/aur-auth; then
-            if grep -q "Permission denied" /tmp/aur-auth; then
-              echo "::warning::The AUR does not accept the deploy key yet — register its public half on the AUR account (docs/releasing.md). The AUR package was not updated."
-              exit 0
-            fi
-            cat /tmp/aur-auth; exit 1
-          fi
-
-          run env GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git clone ssh://aur@aur.archlinux.org/yardsort-bin.git /work/aur
-          run scripts/aur-render.sh "$version" /work/aur
-
-          # Prove the package actually builds before anyone is told about it.
-          (cd /work/aur && run makepkg --force --nodeps --noconfirm)
-          run bash -c 'cd /work/aur && pkg=$(ls yardsort-bin-*.pkg.tar.* | head -1) && bsdtar -tf "$pkg" | grep -qx usr/bin/yardsort'
-
-          cd /work/aur
-          run git add PKGBUILD .SRCINFO
-          if run git diff --cached --quiet; then
-            echo "The AUR package is already at $version."
-            exit 0
-          fi
-          run git -c user.name="Yardsort release bot" -c user.email="noreply@github.com" commit -m "Update to $version"
-          run env GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git push origin HEAD:master
+    uses: ./.github/workflows/packages.yml
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
+    secrets: inherit
