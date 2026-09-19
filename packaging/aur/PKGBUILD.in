@@ -1,0 +1,30 @@
+# Maintainer: Joao Henrique Machado Silva <https://github.com/joaoh82>
+#
+# Generated from packaging/aur/PKGBUILD.in in https://github.com/joaoh82/yardsort by the release
+# workflow. Please send changes there rather than editing this copy.
+
+pkgname=yardsort-bin
+pkgver=@PKGVER@
+pkgrel=1
+pkgdesc="Run AI coding agents in parallel, each in its own git worktree"
+arch=('x86_64')
+url="https://github.com/joaoh82/yardsort"
+license=('GPL-3.0-only')
+depends=('webkit2gtk-4.1' 'gtk3' 'git' 'hicolor-icon-theme')
+optdepends=('libnotify: desktop notifications when an agent finishes'
+            'xdg-desktop-portal: native folder picker on Wayland')
+provides=('yardsort')
+conflicts=('yardsort')
+# The binary is stripped upstream; stripping again gains nothing and debug packages would be empty.
+options=('!strip' '!debug')
+source=("yardsort-${pkgver}.deb::https://github.com/joaoh82/yardsort/releases/download/v@VERSION@/Yardsort_@VERSION@_amd64.deb"
+        "LICENSE-${pkgver}::https://raw.githubusercontent.com/joaoh82/yardsort/v@VERSION@/LICENSE")
+noextract=("yardsort-${pkgver}.deb")
+sha256sums=('@SHA256_DEB@'
+            '@SHA256_LICENSE@')
+
+package() {
+  # A .deb is an ar archive holding the file tree as data.tar.*
+  bsdtar -xOf "${srcdir}/yardsort-${pkgver}.deb" 'data.tar.*' | bsdtar -xf - -C "${pkgdir}"
+  install -Dm644 "${srcdir}/LICENSE-${pkgver}" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

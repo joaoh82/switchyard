@@ -71,7 +71,7 @@ Download the latest build from the [**Releases page**](https://github.com/joaoh8
 
 | System      | File                                                                          |
 | ----------- | ----------------------------------------------------------------------------- |
-| **Linux**   | `.AppImage` (portable), `.deb`, or `.rpm`                                     |
+| **Linux**   | `.AppImage` (portable), `.deb`, or `.rpm` — on Arch: `yay -S yardsort-bin`    |
 | **macOS**   | `.dmg` — universal (Apple Silicon and Intel), signed and notarized            |
 | **Windows** | `-setup.exe` or `.msi` — not code-signed yet: choose _More info → Run anyway_ |
 

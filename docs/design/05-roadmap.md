@@ -152,7 +152,7 @@ To do:
       safe forever — losing it strands every installed copy — so it is a deliberate step.
 - [x] **Renamed to Yardsort** (v0.2.0): the Switchyard name was taken everywhere that matters — see
       open question 14. Existing users' data is carried over on first launch.
-- [ ] AUR package (`yardsort-bin`), published by the release workflow.
+- [x] AUR package `yardsort-bin`, rendered, test-built and published by the release workflow.
 - [ ] Other package managers: Homebrew cask, winget; Flatpak.
 - [ ] Windows code signing, if funding appears.
 - [ ] First-run experience: detect missing git / no agents installed and say what to do.

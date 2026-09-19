@@ -33,11 +33,11 @@ workflow_) and give it an existing tag.
 
 ## What gets built
 
-| System                                   | Artifacts                   | Signing                                                                                |
-| ---------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------- |
-| Linux (x86_64)                           | `.AppImage`, `.deb`, `.rpm` | —                                                                                      |
-| macOS (universal: Apple Silicon + Intel) | `.dmg`, `.app.tar.gz`       | Signed and notarized when the Apple secrets below are set; otherwise an unsigned build |
-| Windows (x86_64)                         | `-setup.exe` (NSIS), `.msi` | Not signed yet — users see a SmartScreen warning                                       |
+| System                                   | Artifacts                                              | Signing                                                                                |
+| ---------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Linux (x86_64)                           | `.AppImage`, `.deb`, `.rpm`; `yardsort-bin` on the AUR | —                                                                                      |
+| macOS (universal: Apple Silicon + Intel) | `.dmg`, `.app.tar.gz`                                  | Signed and notarized when the Apple secrets below are set; otherwise an unsigned build |
+| Windows (x86_64)                         | `-setup.exe` (NSIS), `.msi`                            | Not signed yet — users see a SmartScreen warning                                       |
 
 ## macOS signing and notarization
 
@@ -72,6 +72,35 @@ Until they are set, macOS builds still succeed but are unsigned, and Gatekeeper 
 unless the user removes the quarantine attribute (see
 [troubleshooting](guide/troubleshooting.md#macos)).
 
+## Arch Linux: the AUR package
+
+Each full release (not pre-releases) is also published to the
+[Arch User Repository](https://aur.archlinux.org/packages/yardsort-bin) as **`yardsort-bin`**, which
+repackages the release's `.deb`. The last job of the workflow renders `packaging/aur/PKGBUILD.in`
+with the version and checksums, **builds the package in an Arch container to prove it works**, and
+pushes `PKGBUILD` and `.SRCINFO` to the AUR.
+
+It needs one secret, `AUR_SSH_PRIVATE_KEY`: the private half of an SSH key whose public half is
+registered on the maintainer's AUR account (_My Account → SSH Public Key_). Use a key made only
+for this:
+
+```sh
+ssh-keygen -t ed25519 -N "" -C "yardsort release workflow" -f aur_deploy_key
+gh secret set AUR_SSH_PRIVATE_KEY < aur_deploy_key
+cat aur_deploy_key.pub          # paste this into your AUR account, then delete both files
+```
+
+Without the secret the job says so and does nothing. To publish by hand instead:
+
+```sh
+git clone ssh://aur@aur.archlinux.org/yardsort-bin.git /tmp/yardsort-bin
+scripts/aur-render.sh 0.2.0 /tmp/yardsort-bin      # writes PKGBUILD and .SRCINFO
+cd /tmp/yardsort-bin && makepkg -f && git add PKGBUILD .SRCINFO && git commit -m "Update to 0.2.0" && git push
+```
+
+The name is `yardsort-bin` because it ships a prebuilt binary; a build-from-source `yardsort`
+package is welcome from anyone who wants to maintain one.
+
 ## Windows signing
 
 Deliberately not set up: certificates cost money and the project has none. If that changes,
@@ -82,4 +111,4 @@ workflow needs the certificate passed to the build step.
 
 - **Auto-update.** Needs a signing key for update manifests, kept safe forever (losing it strands
   every installed copy). Tracked on the [roadmap](design/05-roadmap.md).
-- **Package managers** — AUR, Homebrew cask, winget, Flatpak.
+- **More package managers** — Homebrew cask, winget, Flatpak.

@@ -24,11 +24,11 @@ claude --version
 Download the latest build for your system from the
 [**Releases page**](https://github.com/joaoh82/yardsort/releases/latest).
 
-| System      | File                             | Notes                                                                                                                                               |
-| ----------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Linux**   | `.AppImage`, `.deb` or `.rpm`    | AppImage: `chmod +x Yardsort_*.AppImage` and run it.                                                                                                |
-| **macOS**   | `.dmg` (Apple Silicon and Intel) | Open it and drag Yardsort to Applications.                                                                                                          |
-| **Windows** | `-setup.exe` or `.msi`           | Builds are not code-signed yet, so SmartScreen warns: choose **More info → Run anyway**. Needs [Git for Windows](https://git-scm.com/download/win). |
+| System      | File                             | Notes                                                                                                                                                             |
+| ----------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Linux**   | `.AppImage`, `.deb` or `.rpm`    | AppImage: `chmod +x Yardsort_*.AppImage` and run it. On **Arch** and derivatives: `yay -S yardsort-bin` ([AUR](https://aur.archlinux.org/packages/yardsort-bin)). |
+| **macOS**   | `.dmg` (Apple Silicon and Intel) | Open it and drag Yardsort to Applications.                                                                                                                        |
+| **Windows** | `-setup.exe` or `.msi`           | Builds are not code-signed yet, so SmartScreen warns: choose **More info → Run anyway**. Needs [Git for Windows](https://git-scm.com/download/win).               |
 
 Prefer to build it yourself? See [CONTRIBUTING.md](../CONTRIBUTING.md) — it is `just setup && just build`.
 
