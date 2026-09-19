@@ -21,7 +21,7 @@ a live view of the files and diff it is producing.
 3. **Harness-agnostic.** A harness is just configuration: a command and some argument templates.
    Adding a new agent must never require a code change.
 4. **Git-native, no lock-in.** Workspaces are plain git worktrees and plain branches. Everything
-   Switchyard does can be inspected and undone with ordinary `git` commands.
+   Yardsort does can be inspected and undone with ordinary `git` commands.
 5. **Fast and light.** Tauri over Electron; idle cost should be close to a terminal emulator's.
 
 ## v1 scope

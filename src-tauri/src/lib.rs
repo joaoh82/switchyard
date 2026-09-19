@@ -1,4 +1,4 @@
-//! Switchyard core.
+//! Yardsort core.
 //!
 //! The frontend holds no truth: state lives here and the webview renders it. `commands` is the
 //! whole IPC surface and stays thin — real work belongs in the domain modules.
@@ -9,6 +9,7 @@ mod env;
 mod error;
 mod git;
 mod harness;
+mod legacy;
 mod projects;
 mod sessions;
 mod settings;
@@ -118,24 +119,33 @@ pub fn run() {
                 }
                 let _ = terminal::PtyHostEvent(event).emit(&handle);
             }));
-            // `SWITCHYARD_DATA_DIR` keeps experiments and tests away from the real database.
-            let data_dir = match std::env::var_os("SWITCHYARD_DATA_DIR") {
-                Some(dir) if !dir.is_empty() => std::path::PathBuf::from(dir),
-                _ => app.path().app_data_dir()?,
+            // `YARDSORT_DATA_DIR` keeps experiments and tests away from the real database (and
+            // settings, which then sit next to it instead of in the OS config directory).
+            let profile = legacy::env_var_os("DATA_DIR").map(std::path::PathBuf::from);
+            let data_dir = match &profile {
+                Some(dir) => dir.clone(),
+                None => app.path().app_data_dir()?,
             };
-            let database = data_dir.join("switchyard.db");
+            let config_dir = match &profile {
+                Some(dir) => dir.clone(),
+                None => app.path().app_config_dir()?,
+            };
+            // First launch after the rename from Switchyard: bring the user's data along.
+            if profile.is_none() {
+                match legacy::adopt_switchyard_data(&data_dir, "yardsort.db", &config_dir) {
+                    Ok(adopted) => adopted
+                        .iter()
+                        .for_each(|what| eprintln!("carried over from Switchyard: {what}")),
+                    Err(error) => eprintln!("could not carry Switchyard data over: {error}"),
+                }
+            }
+            let database = data_dir.join("yardsort.db");
             let store = store::Store::open(&database)
                 .map_err(|e| format!("cannot open {}: {e}", database.display()))?;
             // Nothing is running yet: sessions that claim to be died with the previous run.
             store
                 .end_interrupted_sessions()
                 .map_err(|e| format!("cannot tidy session records: {e}"))?;
-            // Settings sit next to the database when the data dir is overridden, otherwise in
-            // the OS config directory.
-            let config_dir = match std::env::var_os("SWITCHYARD_DATA_DIR") {
-                Some(dir) if !dir.is_empty() => std::path::PathBuf::from(dir),
-                _ => app.path().app_config_dir()?,
-            };
             let settings = settings::SettingsFile::load(config_dir.join("settings.toml"));
             app.manage(state::AppState::new(host, store, settings));
 
@@ -147,7 +157,7 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running Switchyard");
+        .expect("error while running Yardsort");
 }
 
 #[cfg(test)]

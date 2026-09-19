@@ -41,7 +41,7 @@ export function StatusBar() {
         <span>
           {info
             ? `${info.name} ${info.version}${info.debug ? "-dev" : ""} · ${info.os}/${info.arch}`
-            : "Switchyard · no core"}
+            : "Yardsort · no core"}
         </span>
       </div>
     </footer>

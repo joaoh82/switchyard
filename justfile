@@ -1,4 +1,4 @@
-# Switchyard task runner. `just` lists everything; recipes run from the repo root.
+# Yardsort task runner. `just` lists everything; recipes run from the repo root.
 
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 
@@ -18,7 +18,7 @@ dev:
     bun tauri dev
 
 # Run the app forcing a terminal renderer: webgl or dom
-dev-renderer $SWITCHYARD_RENDERER:
+dev-renderer $YARDSORT_RENDERER:
     bun tauri dev
 
 # Run the frontend alone in a browser tab (no Rust core; terminals won't work)

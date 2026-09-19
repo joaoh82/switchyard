@@ -63,10 +63,10 @@ const codex: HarnessInfo = {
 const settings: SettingsInfo = {
   editorCommand: null,
   notifyWhenQuiet: true,
-  workspaces: { worktreeRoot: null, branchPrefix: "sy" },
-  defaultWorktreeRoot: "/home/me/switchyard",
+  workspaces: { worktreeRoot: null, branchPrefix: "ys" },
+  defaultWorktreeRoot: "/home/me/yardsort",
   worktreeRootOverride: null,
-  filePath: "/home/me/.config/switchyard/settings.toml",
+  filePath: "/home/me/.config/yardsort/settings.toml",
   problem: null,
 };
 
@@ -266,9 +266,9 @@ describe("Settings", () => {
       const { user } = await openWorkspaces();
       expect(screen.getByLabelText("Worktree folder")).toHaveAttribute(
         "placeholder",
-        "/home/me/switchyard",
+        "/home/me/yardsort",
       );
-      expect(screen.getByText("sy/fix-login-bug")).toBeInTheDocument();
+      expect(screen.getByText("ys/fix-login-bug")).toBeInTheDocument();
       await user.clear(screen.getByLabelText("Branch prefix"));
       expect(screen.getByText("fix-login-bug")).toBeInTheDocument();
     });
@@ -311,14 +311,14 @@ describe("Settings", () => {
       core.settingsGet.mockResolvedValue({
         ...settings,
         problem: "settings.toml could not be read: expected `]`",
-        worktreeRootOverride: "/tmp/sy-wt",
+        worktreeRootOverride: "/tmp/ys-wt",
       });
       await openWorkspaces();
       expect(screen.getByRole("alert")).toHaveTextContent(
         /could not be read[\s\S]*settings\.toml\.unreadable/,
       );
       expect(
-        screen.getByText(/Overridden by SWITCHYARD_WORKTREE_ROOT.*\/tmp\/sy-wt/),
+        screen.getByText(/Overridden by YARDSORT_WORKTREE_ROOT.*\/tmp\/ys-wt/),
       ).toBeInTheDocument();
     });
   });

@@ -70,8 +70,8 @@ export function GeneralSettings() {
         <span>
           Notify me when an agent finishes
           <span className="block text-ink-faint">
-            A desktop notification when an agent that worked for a while goes quiet and Switchyard
-            is not the window you are looking at.
+            A desktop notification when an agent that worked for a while goes quiet and Yardsort is
+            not the window you are looking at.
           </span>
         </span>
       </label>

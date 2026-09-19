@@ -9,9 +9,9 @@ numbers. This is that record. **Verdict: go** — see [conclusions](#conclusions
 scripts/bench/run.sh
 ```
 
-A debug build started with `SWITCHYARD_BENCH='<shell script>'` opens one terminal, runs the script in
+A debug build started with `YARDSORT_BENCH='<shell script>'` opens one terminal, runs the script in
 it, records `requestAnimationFrame` intervals from the first byte of output to the last, prints a
-`SWITCHYARD_BENCH_RESULT {json}` line and quits. `SWITCHYARD_RENDERER=webgl|dom` forces the
+`YARDSORT_BENCH_RESULT {json}` line and quits. `YARDSORT_RENDERER=webgl|dom` forces the
 renderer. The window must be visible: webviews stop animation frames when hidden.
 
 Two workloads:

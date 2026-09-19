@@ -180,7 +180,7 @@ describe("Sidebar", () => {
 
     native.confirm.mockResolvedValue(false);
     await user.click(screen.getByRole("button", { name: "More actions for alpha" }));
-    await user.click(screen.getByRole("menuitem", { name: /Remove from Switchyard/ }));
+    await user.click(screen.getByRole("menuitem", { name: /Remove from Yardsort/ }));
     expect(native.confirm).toHaveBeenCalledWith(
       expect.stringMatching(/Nothing on disk is deleted[\s\S]*1 running terminal session /),
       expect.anything(),
@@ -189,7 +189,7 @@ describe("Sidebar", () => {
 
     native.confirm.mockResolvedValue(true);
     await user.click(screen.getByRole("button", { name: "More actions for alpha" }));
-    await user.click(screen.getByRole("menuitem", { name: /Remove from Switchyard/ }));
+    await user.click(screen.getByRole("menuitem", { name: /Remove from Yardsort/ }));
     expect(core.ptyClose).toHaveBeenCalledWith("s-w-alpha");
     expect(core.projectRemove).toHaveBeenCalledWith("p-alpha");
     expect(screen.queryByRole("treeitem", { name: "alpha" })).not.toBeInTheDocument();
@@ -240,7 +240,7 @@ describe("Sidebar", () => {
 
       expect(native.confirm).toHaveBeenCalledTimes(1);
       expect(native.confirm.mock.calls[0]![0]).toMatch(
-        /branch "sy\/fix-login" and all its commits are kept/,
+        /branch "ys\/fix-login" and all its commits are kept/,
       );
       expect(core.workspaceDelete).toHaveBeenCalledWith("w-app-fix-login", false);
       expect(screen.queryByRole("treeitem", { name: "fix-login" })).not.toBeInTheDocument();

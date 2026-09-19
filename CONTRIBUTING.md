@@ -1,4 +1,4 @@
-# Contributing to Switchyard
+# Contributing to Yardsort
 
 Thank you for being here. Bug reports, ideas, documentation fixes and code are all welcome, and
 small contributions are as appreciated as large ones.
@@ -8,8 +8,8 @@ licensed under the project's [GPL-3.0 license](LICENSE).
 
 ## Ways to help
 
-- **Report a bug** or **suggest a feature** — [open an issue](https://github.com/joaoh82/switchyard/issues/new/choose).
-- **Try it on your system.** Switchyard targets Linux, macOS and Windows; reports from real
+- **Report a bug** or **suggest a feature** — [open an issue](https://github.com/joaoh82/yardsort/issues/new/choose).
+- **Try it on your system.** Yardsort targets Linux, macOS and Windows; reports from real
   machines — especially Windows, and Linux desktops other than the author's — are gold.
 - **Add or correct a harness.** Agent CLIs change their flags often. If a built-in definition is
   out of date, a one-line fix in `src-tauri/src/harness.rs` helps everyone.
@@ -26,22 +26,22 @@ You need [Rust](https://rustup.rs) (stable), [Bun](https://bun.sh), git,
 [system dependencies](https://tauri.app/start/prerequisites/) for your OS.
 
 ```sh
-git clone https://github.com/joaoh82/switchyard && cd switchyard
+git clone https://github.com/joaoh82/yardsort && cd yardsort
 just setup
 just dev
 ```
 
 Useful while developing:
 
-| Command                                | Does                                                                              |
-| -------------------------------------- | --------------------------------------------------------------------------------- |
-| `just dev`                             | Run the app with hot reload.                                                      |
-| `just check`                           | Everything CI checks except the bindings: formatting, lints, types, all tests.    |
-| `just test-rust` / `just test-web`     | One side's tests; both take extra arguments.                                      |
-| `just fmt`                             | Format Rust and TypeScript.                                                       |
-| `just bindings-check`                  | Fail if the generated TypeScript bindings are stale. Run before pushing.          |
-| `just lint-windows`                    | Clippy the PTY crate for Windows from any OS.                                     |
-| `SWITCHYARD_DATA_DIR=/tmp/sy just dev` | Run against a throwaway database and settings file, leaving your real ones alone. |
+| Command                              | Does                                                                              |
+| ------------------------------------ | --------------------------------------------------------------------------------- |
+| `just dev`                           | Run the app with hot reload.                                                      |
+| `just check`                         | Everything CI checks except the bindings: formatting, lints, types, all tests.    |
+| `just test-rust` / `just test-web`   | One side's tests; both take extra arguments.                                      |
+| `just fmt`                           | Format Rust and TypeScript.                                                       |
+| `just bindings-check`                | Fail if the generated TypeScript bindings are stale. Run before pushing.          |
+| `just lint-windows`                  | Clippy the PTY crate for Windows from any OS.                                     |
+| `YARDSORT_DATA_DIR=/tmp/ys just dev` | Run against a throwaway database and settings file, leaving your real ones alone. |
 
 ## How the code is laid out
 

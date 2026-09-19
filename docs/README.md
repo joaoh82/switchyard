@@ -1,9 +1,9 @@
-# Switchyard documentation
+# Yardsort documentation
 
 **New here?** Start with the [quick start](quick-start.md) — from download to your first agent in a
 few minutes.
 
-## Using Switchyard
+## Using Yardsort
 
 | Guide                                                   | What it covers                                                            |
 | ------------------------------------------------------- | ------------------------------------------------------------------------- |

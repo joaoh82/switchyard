@@ -28,7 +28,7 @@ export function AppShell() {
   const setSettingsOpen = useLayoutStore((s) => s.setSettingsOpen);
 
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
-    id: "switchyard.shell",
+    id: "yardsort.shell",
     storage: localStorage,
   });
 

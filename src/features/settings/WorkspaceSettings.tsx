@@ -75,7 +75,7 @@ export function WorkspaceSettings() {
         hint={
           info.worktreeRootOverride ? (
             <span className="text-accent">
-              Overridden by SWITCHYARD_WORKTREE_ROOT for this run: {info.worktreeRootOverride}
+              Overridden by YARDSORT_WORKTREE_ROOT for this run: {info.worktreeRootOverride}
             </span>
           ) : (
             <>

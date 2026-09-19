@@ -69,9 +69,9 @@ describe("Composer", () => {
     vi.clearAllMocks();
     core.uiStateSave.mockResolvedValue(undefined);
     core.projectBranches.mockResolvedValue({
-      branches: ["develop", "main", "sy/kept-earlier", "sy/in-use"],
+      branches: ["develop", "main", "ys/kept-earlier", "ys/in-use"],
       default: "main",
-      checkedOut: ["main", "sy/in-use"],
+      checkedOut: ["main", "ys/in-use"],
     });
     core.harnessesList.mockResolvedValue([
       harness("claude", { efforts: ["low", "high"], models: ["opus", "sonnet"] }),
@@ -144,19 +144,19 @@ describe("Composer", () => {
       within(group)
         .getAllByRole("option")
         .map((o) => o.textContent),
-    ).toEqual(["develop", "sy/kept-earlier"]);
+    ).toEqual(["develop", "ys/kept-earlier"]);
 
     await user.selectOptions(
       screen.getByRole("combobox", { name: "Branch" }),
-      "open:sy/kept-earlier",
+      "open:ys/kept-earlier",
     );
     expect(screen.getByText(/Enter to start/)).toHaveTextContent(
-      'Opens the existing branch "sy/kept-earlier"',
+      'Opens the existing branch "ys/kept-earlier"',
     );
     await user.click(screen.getByRole("button", { name: "Start" }));
 
     expect(core.workspaceCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ baseBranch: null, existingBranch: "sy/kept-earlier" }),
+      expect.objectContaining({ baseBranch: null, existingBranch: "ys/kept-earlier" }),
     );
   });
 

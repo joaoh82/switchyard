@@ -40,6 +40,6 @@ can tell them apart. The choice is remembered.
 
 ## Reviewing is read-only
 
-Switchyard shows you changes; it does not stage, commit or discard them. Do that the way you
+Yardsort shows you changes; it does not stage, commit or discard them. Do that the way you
 already do — ask the agent, use a shell tab (`Ctrl+Shift+T`), or open the folder in your editor
 or git client. The workspace is an ordinary git checkout at the path shown in the footer.

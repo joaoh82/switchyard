@@ -49,7 +49,7 @@ async function openProjectFromDiskUnguarded(): Promise<boolean> {
   let result = await projects.openFolder(folder);
   if (result.status === "needs-git") {
     const agreed = await native.confirm(
-      `${folder}\n\nis not a git repository. Switchyard needs one: every workspace is a git worktree.\n\nInitialise git here? This runs "git init" and creates an empty first commit. Your files are not changed.`,
+      `${folder}\n\nis not a git repository. Yardsort needs one: every workspace is a git worktree.\n\nInitialise git here? This runs "git init" and creates an empty first commit. Your files are not changed.`,
       { title: "Initialise git?", okLabel: "Initialise git" },
     );
     if (!agreed) return false;
@@ -70,7 +70,7 @@ async function removeProjectUnguarded(project: Project) {
     .getState()
     .tabs.filter((tab) => !tab.exit && project.workspaces.some((w) => w.id === tab.workspaceId));
   const agreed = await native.confirm(
-    `Remove "${project.name}" from Switchyard?\n\nNothing on disk is deleted — the folder and its git history stay exactly as they are.` +
+    `Remove "${project.name}" from Yardsort?\n\nNothing on disk is deleted — the folder and its git history stay exactly as they are.` +
       (running.length > 0
         ? `\n\n${running.length} running terminal session${running.length === 1 ? "" : "s"} in this project will be closed.`
         : ""),

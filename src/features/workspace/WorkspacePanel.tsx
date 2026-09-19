@@ -140,7 +140,7 @@ function Welcome() {
   return (
     <Centered>
       <img src="/icon.svg" alt="" className="mx-auto mb-4 size-16 opacity-90" />
-      <h1 className="text-lg font-semibold">Switchyard</h1>
+      <h1 className="text-lg font-semibold">Yardsort</h1>
       <p className="mt-1 text-ink-muted">Every agent on its own track.</p>
       <p className="mt-5 text-ink-faint">
         {hasProjects

@@ -1,7 +1,7 @@
 //! Worktree workspaces: one branch, one folder, one line of work.
 //!
 //! Everything here is plain git underneath — `git worktree add -b` and `git worktree remove` —
-//! so a user can always inspect or undo what Switchyard did with their own tools.
+//! so a user can always inspect or undo what Yardsort did with their own tools.
 
 pub mod commands;
 mod naming;
@@ -46,7 +46,7 @@ impl Workspaces<'_> {
         let project_dir = self.project_dir(&project);
         let seed = self.store.workspaces()?.len();
         // A name is free only if neither its branch nor its folder exists — including leftovers
-        // Switchyard does not know about.
+        // Yardsort does not know about.
         let mut probe_error = None;
         let name = naming::unique(&naming::base_name(prompt, seed), |candidate| {
             let branch_taken = self
@@ -81,7 +81,7 @@ impl Workspaces<'_> {
             ));
         }
         let project_dir = self.project_dir(&project);
-        // `sy/fix-login` comes back as `fix-login`; other branches are named after themselves.
+        // `ys/fix-login` comes back as `fix-login`; other branches are named after themselves.
         let own = self.settings.name_from_branch(branch);
         let base = naming::slugify_name(own).unwrap_or_else(|| naming::base_name("", 0));
         let name = naming::unique(&base, |candidate| project_dir.join(candidate).exists());
@@ -307,7 +307,7 @@ impl Workspaces<'_> {
     }
 }
 
-/// Adopt worktrees git knows about but Switchyard does not — made by hand, or orphaned when
+/// Adopt worktrees git knows about but Yardsort does not — made by hand, or orphaned when
 /// their project was removed and added again. Returns how many were adopted.
 pub fn adopt_unknown(store: &Store, git: &Git, project_id: &str) -> IpcResult<usize> {
     let Some(project) = store.project(project_id)? else {
@@ -410,13 +410,13 @@ mod tests {
             .unwrap();
 
         assert_eq!(ws.name, "fix-login-bug");
-        assert_eq!(ws.branch.as_deref(), Some("sy/fix-login-bug"));
+        assert_eq!(ws.branch.as_deref(), Some("ys/fix-login-bug"));
         let path = PathBuf::from(&ws.path);
         assert_eq!(path, fx.worktrees.join("my-app").join("fix-login-bug"));
         assert!(!path.starts_with(&fx.repo));
         assert_eq!(
             fx.git.head(&path).unwrap(),
-            Head::Branch("sy/fix-login-bug".into())
+            Head::Branch("ys/fix-login-bug".into())
         );
         assert_eq!(fx.names(), ["local", "fix-login-bug"]);
     }
@@ -427,12 +427,12 @@ mod tests {
         fx.workspaces()
             .create(&fx.project_id, None, "add tests")
             .unwrap();
-        // A branch Switchyard does not know about still counts as taken.
+        // A branch Yardsort does not know about still counts as taken.
         fx.git
             .worktree_add(
                 &fx.repo,
                 &fx.worktrees.join("elsewhere"),
-                "sy/add-tests-2",
+                "ys/add-tests-2",
                 &fx.git.default_branch(&fx.repo).unwrap().unwrap(),
             )
             .unwrap();
@@ -509,7 +509,7 @@ mod tests {
             ["local", "hotfix"],
             "a failed create leaves nothing behind"
         );
-        assert!(!fx.git.branch_exists(&fx.repo, "sy/x").unwrap());
+        assert!(!fx.git.branch_exists(&fx.repo, "ys/x").unwrap());
     }
 
     #[test]
@@ -539,7 +539,7 @@ mod tests {
             .unwrap();
         fx.workspaces().discard(&ws).unwrap();
         assert!(!PathBuf::from(&ws.path).exists());
-        assert!(!fx.git.branch_exists(&fx.repo, "sy/doomed").unwrap());
+        assert!(!fx.git.branch_exists(&fx.repo, "ys/doomed").unwrap());
         assert_eq!(fx.names(), ["local"]);
     }
 
@@ -559,11 +559,11 @@ mod tests {
 
         let back = fx
             .workspaces()
-            .open_branch(&fx.project_id, "sy/write-docs")
+            .open_branch(&fx.project_id, "ys/write-docs")
             .unwrap();
 
         assert_eq!(back.name, "write-docs");
-        assert_eq!(back.branch.as_deref(), Some("sy/write-docs"));
+        assert_eq!(back.branch.as_deref(), Some("ys/write-docs"));
         assert_eq!(back.base_branch, None, "we did not create this branch");
         assert!(
             PathBuf::from(&back.path).join("DOCS.md").exists(),
@@ -603,7 +603,7 @@ mod tests {
             .unwrap();
         let err = fx
             .workspaces()
-            .open_branch(&fx.project_id, "sy/busy")
+            .open_branch(&fx.project_id, "ys/busy")
             .unwrap_err();
         assert_eq!(err.code, "git_failed");
         assert_eq!(fx.names(), ["local", "busy"]);
@@ -611,7 +611,7 @@ mod tests {
     }
 
     #[test]
-    fn worktrees_switchyard_does_not_know_are_adopted_once() {
+    fn worktrees_yardsort_does_not_know_are_adopted_once() {
         let fx = Fixture::new();
         let ours = fx
             .workspaces()
@@ -707,7 +707,7 @@ mod tests {
         assert!(!path.exists());
         assert_eq!(fx.names(), ["local"]);
         assert!(
-            fx.git.branch_exists(&fx.repo, "sy/wip").unwrap(),
+            fx.git.branch_exists(&fx.repo, "ys/wip").unwrap(),
             "commits are never thrown away"
         );
     }
@@ -723,7 +723,7 @@ mod tests {
         fx.workspaces().delete(&ws.id, false).unwrap();
         assert_eq!(fx.names(), ["local"]);
         // …and git has forgotten it too, so the name is free again.
-        fx.git.branch_delete(&fx.repo, "sy/gone").unwrap();
+        fx.git.branch_delete(&fx.repo, "ys/gone").unwrap();
         assert_eq!(
             fx.workspaces()
                 .create(&fx.project_id, None, "gone")

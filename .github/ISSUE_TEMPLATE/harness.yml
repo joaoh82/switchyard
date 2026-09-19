@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Any terminal agent can already be added in **Settings → Harnesses → Add custom harness** —
-        see the [guide](https://github.com/joaoh82/switchyard/blob/main/docs/guide/settings.md#adding-your-own-harness).
+        see the [guide](https://github.com/joaoh82/yardsort/blob/main/docs/guide/settings.md#adding-your-own-harness).
         Use this form when a **built-in** definition should change, or to propose a new built-in.
   - type: input
     id: agent

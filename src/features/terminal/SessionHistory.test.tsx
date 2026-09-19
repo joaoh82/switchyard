@@ -79,7 +79,7 @@ describe("SessionHistory", () => {
       "listitem",
     );
     expect(items[0]).toHaveTextContent("Claude Code — add dark mode");
-    expect(items[0]).toHaveTextContent("interrupted when Switchyard closed");
+    expect(items[0]).toHaveTextContent("interrupted when Yardsort closed");
     expect(items[1]).toHaveTextContent("opus");
 
     await user.click(within(items[0]!).getByRole("button", { name: "Resume" }));

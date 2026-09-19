@@ -122,7 +122,7 @@ impl Git {
     }
 
     /// Create an empty first commit. A repository without commits cannot have worktrees, so
-    /// Switchyard never leaves one it created in that state.
+    /// Yardsort never leaves one it created in that state.
     pub fn initial_commit(&self, root: &Path) -> GitResult<()> {
         self.run(root, &["commit", "--allow-empty", "-m", "Initial commit"])
             .map(drop)
@@ -347,20 +347,20 @@ mod tests {
         let elsewhere = tempfile::tempdir().unwrap();
         let path = elsewhere.path().join("feature");
 
-        git.worktree_add(repo.path(), &path, "sy/feature", "trunk")
+        git.worktree_add(repo.path(), &path, "ys/feature", "trunk")
             .unwrap();
-        assert_eq!(git.head(&path).unwrap(), Head::Branch("sy/feature".into()));
-        assert!(git.branch_exists(repo.path(), "sy/feature").unwrap());
-        assert_eq!(git.branches(repo.path()).unwrap(), ["sy/feature", "trunk"]);
+        assert_eq!(git.head(&path).unwrap(), Head::Branch("ys/feature".into()));
+        assert!(git.branch_exists(repo.path(), "ys/feature").unwrap());
+        assert_eq!(git.branches(repo.path()).unwrap(), ["trunk", "ys/feature"]);
 
         git.worktree_remove(repo.path(), &path, false).unwrap();
         assert!(!path.exists());
         assert!(
-            git.branch_exists(repo.path(), "sy/feature").unwrap(),
+            git.branch_exists(repo.path(), "ys/feature").unwrap(),
             "the branch outlives it"
         );
-        git.branch_delete(repo.path(), "sy/feature").unwrap();
-        assert!(!git.branch_exists(repo.path(), "sy/feature").unwrap());
+        git.branch_delete(repo.path(), "ys/feature").unwrap();
+        assert!(!git.branch_exists(repo.path(), "ys/feature").unwrap());
     }
 
     #[test]
@@ -368,8 +368,8 @@ mod tests {
         let (git, repo) = repo_with_commit();
         let elsewhere = tempfile::tempdir().unwrap();
         let (a, b) = (elsewhere.path().join("a"), elsewhere.path().join("b"));
-        git.worktree_add(repo.path(), &a, "sy/a", "trunk").unwrap();
-        git.worktree_add(repo.path(), &b, "sy/b", "trunk").unwrap();
+        git.worktree_add(repo.path(), &a, "ys/a", "trunk").unwrap();
+        git.worktree_add(repo.path(), &b, "ys/b", "trunk").unwrap();
         git.run(&b, &["checkout", "--detach"]).unwrap();
         std::fs::remove_dir_all(&a).unwrap();
 
@@ -377,7 +377,7 @@ mod tests {
         assert_eq!(list.len(), 3);
         assert!(list[0].is_main && list[0].branch.as_deref() == Some("trunk"));
         assert_eq!(list[0].path, normalize(repo.path()));
-        assert!(list[1].prunable && list[1].branch.as_deref() == Some("sy/a"));
+        assert!(list[1].prunable && list[1].branch.as_deref() == Some("ys/a"));
         assert!(!list[2].prunable && !list[2].is_main && list[2].branch.is_none());
         assert_eq!(list[2].path, normalize(&b));
     }
@@ -404,7 +404,7 @@ mod tests {
         let (git, repo) = repo_with_commit();
         let elsewhere = tempfile::tempdir().unwrap();
         let path = elsewhere.path().join("wip");
-        git.worktree_add(repo.path(), &path, "sy/wip", "trunk")
+        git.worktree_add(repo.path(), &path, "ys/wip", "trunk")
             .unwrap();
         std::fs::write(path.join("unsaved.txt"), "work in progress").unwrap();
 

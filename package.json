@@ -1,11 +1,11 @@
 {
-  "name": "switchyard",
+  "name": "yardsort",
   "version": "0.1.0",
   "description": "Run AI coding agents in parallel, each in its own git worktree",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": "https://github.com/joaoh82/switchyard.git"
+    "url": "https://github.com/joaoh82/yardsort.git"
   },
   "private": true,
   "type": "module",
@@ -21,7 +21,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint:windows": "cargo clippy -p pty-host --all-targets --target x86_64-pc-windows-msvc -- -D warnings",
-    "bindings": "cargo test -p switchyard export_bindings",
+    "bindings": "cargo test -p yardsort export_bindings",
     "check": "bun run format:check && bun run lint && bun run typecheck && bun run test"
   },
   "dependencies": {

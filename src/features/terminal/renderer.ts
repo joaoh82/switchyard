@@ -4,7 +4,7 @@ import type { Terminal } from "@xterm/xterm";
 export type RendererKind = "webgl" | "dom";
 export type RendererPreference = RendererKind | "auto";
 
-const STORAGE_KEY = "switchyard.terminal.renderer";
+const STORAGE_KEY = "yardsort.terminal.renderer";
 
 export function rendererPreference(override?: string | null): RendererPreference {
   const value = override ?? localStorage.getItem(STORAGE_KEY);

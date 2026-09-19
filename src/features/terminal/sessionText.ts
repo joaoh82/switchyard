@@ -14,7 +14,7 @@ export function timeAgo(then: number | null, now = Date.now()): string {
 
 export function describeEnd(record: SessionRecord): string {
   if (record.running) return "running";
-  if (record.interrupted) return "interrupted when Switchyard closed";
+  if (record.interrupted) return "interrupted when Yardsort closed";
   if (record.exitCode === 0) return "ended";
   // 128 + n is a shell's way of saying "killed by signal n" — which is what closing a tab does.
   return (record.exitCode ?? 0) > 128 ? "stopped" : `exited with code ${record.exitCode}`;

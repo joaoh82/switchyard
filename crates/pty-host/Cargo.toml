@@ -1,6 +1,6 @@
 [package]
 name = "pty-host"
-description = "Owns pseudo-terminal sessions for Switchyard. No UI or Tauri dependencies: runs in-process today, as a daemon later."
+description = "Owns pseudo-terminal sessions for Yardsort. No UI or Tauri dependencies: runs in-process today, as a daemon later."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

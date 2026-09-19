@@ -23,7 +23,7 @@ pub struct HarnessInfo {
     pub def: HarnessDef,
     /// Where `command` resolved to on the user's `PATH`; `None` if it is not installed.
     pub resolved_path: Option<String>,
-    /// Ships with Switchyard (as opposed to one the user added).
+    /// Ships with Yardsort (as opposed to one the user added).
     pub builtin: bool,
     /// A built-in whose definition the user has changed.
     pub modified: bool,
@@ -57,7 +57,7 @@ pub struct SettingsInfo {
     pub notify_when_quiet: bool,
     pub workspaces: WorkspaceSettingsDto,
     pub default_worktree_root: String,
-    /// Set while `SWITCHYARD_WORKTREE_ROOT` overrides the setting.
+    /// Set while `YARDSORT_WORKTREE_ROOT` overrides the setting.
     pub worktree_root_override: Option<String>,
     pub file_path: String,
     /// Why the settings file was ignored, if it was (it is kept, never overwritten).
@@ -247,9 +247,8 @@ fn settings_info(state: &AppState) -> IpcResult<SettingsInfo> {
             .default_worktree_root()?
             .to_string_lossy()
             .into_owned(),
-        worktree_root_override: std::env::var("SWITCHYARD_WORKTREE_ROOT")
-            .ok()
-            .filter(|dir| !dir.is_empty()),
+        worktree_root_override: crate::legacy::env_var_os("WORKTREE_ROOT")
+            .map(|dir| dir.to_string_lossy().into_owned()),
         file_path: state.settings.path().to_string_lossy().into_owned(),
         problem: state.settings.problem(),
     })

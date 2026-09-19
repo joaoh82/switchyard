@@ -544,14 +544,14 @@ mod tests {
     fn unknown_programs_fail_with_a_useful_error() {
         let err = launch_plan(
             &process_env(),
-            Some("switchyard-no-such-program".into()),
+            Some("yardsort-no-such-program".into()),
             vec![],
             None,
             SIZE,
         )
         .unwrap_err();
         assert_eq!(err.code, "program_not_found");
-        assert!(err.message.contains("switchyard-no-such-program"));
+        assert!(err.message.contains("yardsort-no-such-program"));
     }
 
     #[test]

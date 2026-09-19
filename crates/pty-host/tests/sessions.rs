@@ -342,9 +342,9 @@ fn labels_are_stored_and_reported_back_untouched() {
 fn a_missing_program_is_a_spawn_error() {
     let (host, _events) = host();
     let mut plan = shell("");
-    plan.program = "switchyard-no-such-program".into();
+    plan.program = "yardsort-no-such-program".into();
     match host.spawn(plan) {
-        Err(HostError::Spawn { program, .. }) => assert_eq!(program, "switchyard-no-such-program"),
+        Err(HostError::Spawn { program, .. }) => assert_eq!(program, "yardsort-no-such-program"),
         other => panic!("expected a spawn error, got {other:?}"),
     }
 }

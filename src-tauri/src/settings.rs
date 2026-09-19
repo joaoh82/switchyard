@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::harness::HarnessOverride;
 
-pub const DEFAULT_BRANCH_PREFIX: &str = "sy";
+pub const DEFAULT_BRANCH_PREFIX: &str = "ys";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -54,7 +54,7 @@ impl GeneralSettings {
 #[serde(default)]
 pub struct WorkspaceSettings {
     /// Where worktrees are created: `<root>/<project>/<workspace>`. `None` means
-    /// `~/switchyard`.
+    /// `~/yardsort`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub worktree_root: Option<String>,
     /// New branches are named `<prefix>/<workspace>`; empty means no prefix.
@@ -110,6 +110,8 @@ impl WorkspaceSettings {
         branch
             .strip_prefix(&self.branch_prefix)
             .and_then(|rest| rest.strip_prefix('/'))
+            // Branches from when the app was Switchyard and the prefix `sy`.
+            .or_else(|| crate::legacy::strip_old_branch_prefix(branch))
             .unwrap_or(branch)
     }
 }
@@ -188,7 +190,7 @@ impl SettingsFile {
 fn render(settings: &Settings) -> String {
     let body = toml::to_string_pretty(settings).expect("settings are plain data");
     format!(
-        "# Switchyard settings. Edited by the app — comments here are not preserved.\n\
+        "# Yardsort settings. Edited by the app — comments here are not preserved.\n\
          # Only values that differ from the defaults are stored; delete an entry to restore it.\n\n{body}"
     )
 }
@@ -218,7 +220,7 @@ mod tests {
         let (_dir, path) = file();
         let settings = SettingsFile::load(path.clone());
         assert_eq!(settings.get(), Settings::default());
-        assert_eq!(settings.get().workspaces.branch_prefix, "sy");
+        assert_eq!(settings.get().workspaces.branch_prefix, "ys");
         assert_eq!(settings.problem(), None);
         assert!(!path.exists());
     }
@@ -302,21 +304,21 @@ mod tests {
             branch_prefix: prefix.into(),
             ..Default::default()
         };
-        for ok in ["sy", "", "joao/wip", "feature"] {
+        for ok in ["ys", "", "joao/wip", "feature"] {
             assert!(with(ok).validate().is_ok(), "{ok:?}");
         }
         for bad in ["has space", "/lead", "trail/", "a..b", "x~y", "-dash", "q?"] {
             assert!(with(bad).validate().is_err(), "{bad:?}");
         }
-        assert_eq!(with("sy").branch_for("fix"), "sy/fix");
+        assert_eq!(with("ys").branch_for("fix"), "ys/fix");
         assert_eq!(with("").branch_for("fix"), "fix");
-        assert_eq!(with("sy").name_from_branch("sy/fix"), "fix");
+        assert_eq!(with("ys").name_from_branch("ys/fix"), "fix");
         assert_eq!(
-            with("sy").name_from_branch("system"),
+            with("ys").name_from_branch("system"),
             "system",
             "a prefix is a whole path part"
         );
-        assert_eq!(with("").name_from_branch("sy/fix"), "sy/fix");
+        assert_eq!(with("").name_from_branch("ys/fix"), "ys/fix");
 
         let relative = WorkspaceSettings {
             worktree_root: Some("relative/dir".into()),

@@ -1,6 +1,6 @@
-# Working on Switchyard
+# Working on Yardsort
 
-Instructions for AI coding agents (and a fair summary for humans). Switchyard is a Tauri 2
+Instructions for AI coding agents (and a fair summary for humans). Yardsort is a Tauri 2
 desktop app — Rust core, React + TypeScript frontend — that runs terminal coding agents in
 parallel git worktrees on Linux, macOS and Windows. Read [CONTRIBUTING.md](CONTRIBUTING.md) for
 the code layout and [docs/design/03-architecture.md](docs/design/03-architecture.md) for how it
@@ -19,7 +19,7 @@ the documentation says so, in the same commit or pull request.**
   found) and open questions (strike the ones that get settled).
 - Screenshots live in `docs/images/`. Retake them when the UI they show changes noticeably. They
   must never show a real user's name, paths, projects or account details — use a throwaway
-  profile (`SWITCHYARD_DATA_DIR`, `SWITCHYARD_WORKTREE_ROOT`) and demo repositories.
+  profile (`YARDSORT_DATA_DIR`, `YARDSORT_WORKTREE_ROOT`) and demo repositories.
 - Before finishing, reread the docs you touched against the code. Do not document behaviour you
   have not verified.
 
@@ -58,7 +58,7 @@ it). Never edit it by hand; commit it when it changes.
 ## Trying the app without touching real data
 
 ```sh
-SWITCHYARD_DATA_DIR=/tmp/sy SWITCHYARD_WORKTREE_ROOT=/tmp/sy-wt just dev
+YARDSORT_DATA_DIR=/tmp/ys YARDSORT_WORKTREE_ROOT=/tmp/ys-wt just dev
 ```
 
 If the app is started from a terminal that is itself inside an agent, that is fine: the launch

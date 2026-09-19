@@ -50,7 +50,7 @@ jobs:
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             prerelease=""
             case "$TAG" in *-*) prerelease="--prerelease" ;; esac
-            gh release create "$TAG" --draft --verify-tag --generate-notes --title "Switchyard $TAG" $prerelease
+            gh release create "$TAG" --draft --verify-tag --generate-notes --title "Yardsort $TAG" $prerelease
           fi
           echo "id=$(gh release view "$TAG" --json databaseId -q .databaseId)" >> "$GITHUB_OUTPUT"
 
@@ -120,9 +120,9 @@ jobs:
               exit 1
             fi
             {
-              echo "$name<<__SWITCHYARD_EOF__"
+              echo "$name<<__YARDSORT_EOF__"
               echo "$value"
-              echo "__SWITCHYARD_EOF__"
+              echo "__YARDSORT_EOF__"
             } >> "$GITHUB_ENV"
           done
 

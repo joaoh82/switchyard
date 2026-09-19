@@ -8,7 +8,7 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 /** Commands */
 export const commands = {
 	appInfo: () => __TAURI_INVOKE<AppInfo>("app_info"),
-	/**  Receives the result of a `SWITCHYARD_BENCH` run, prints it as one line of JSON and quits. */
+	/**  Receives the result of a `YARDSORT_BENCH` run, prints it as one line of JSON and quits. */
 	benchReport: (report: string) => __TAURI_INVOKE<void>("bench_report", { report }),
 	projectsList: () => typedError<Project[], IpcError>(__TAURI_INVOKE("projects_list")),
 	/**  Add the repository containing `path`. Fails with `not_a_git_repo` unless `init_git` is set. */
@@ -152,11 +152,11 @@ export type CreatedWorkspace = {
  */
 export type DevFlags = {
 	/**
-	 *  `SWITCHYARD_BENCH`: a shell script to run in a terminal while frame times are recorded;
+	 *  `YARDSORT_BENCH`: a shell script to run in a terminal while frame times are recorded;
 	 *  the app prints the result and exits. See `docs/design/07-terminal-benchmarks.md`.
 	 */
 	bench: string | null,
-	/**  `SWITCHYARD_RENDERER`: force the terminal renderer (`webgl` or `dom`). */
+	/**  `YARDSORT_RENDERER`: force the terminal renderer (`webgl` or `dom`). */
 	renderer: string | null,
 };
 
@@ -238,7 +238,7 @@ export type HarnessDef = {
 export type HarnessInfo = {
 	/**  Where `command` resolved to on the user's `PATH`; `None` if it is not installed. */
 	resolvedPath: string | null,
-	/**  Ships with Switchyard (as opposed to one the user added). */
+	/**  Ships with Yardsort (as opposed to one the user added). */
 	builtin: boolean,
 	/**  A built-in whose definition the user has changed. */
 	modified: boolean,
@@ -407,7 +407,7 @@ export type SettingsInfo = {
 	notifyWhenQuiet: boolean,
 	workspaces: WorkspaceSettingsDto,
 	defaultWorktreeRoot: string,
-	/**  Set while `SWITCHYARD_WORKTREE_ROOT` overrides the setting. */
+	/**  Set while `YARDSORT_WORKTREE_ROOT` overrides the setting. */
 	worktreeRootOverride: string | null,
 	filePath: string,
 	/**  Why the settings file was ignored, if it was (it is kept, never overwritten). */

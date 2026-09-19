@@ -89,7 +89,7 @@ pub struct FileDiff {
 pub struct Changes<'a> {
     pub git: &'a Git,
     pub root: &'a Path,
-    /// The branch this workspace started from, if Switchyard knows.
+    /// The branch this workspace started from, if Yardsort knows.
     pub base_branch: Option<&'a str>,
 }
 
@@ -512,7 +512,7 @@ mod tests {
             "same content, long enough to be recognised as a rename\n",
         );
         repo.commit("more on main");
-        repo.run(&["checkout", "-q", "-b", "sy/feature"]);
+        repo.run(&["checkout", "-q", "-b", "ys/feature"]);
         repo.write("feature.rs", "one\ntwo\n");
         std::fs::remove_file(repo.path().join("doomed.txt")).unwrap();
         repo.run(&["mv", "old name.txt", "new name.txt"]);
@@ -521,7 +521,7 @@ mod tests {
         repo.run(&["checkout", "-q", "main"]);
         repo.write("unrelated.txt", "main only\n");
         repo.commit("main moves on");
-        repo.run(&["checkout", "-q", "sy/feature"]);
+        repo.run(&["checkout", "-q", "ys/feature"]);
 
         let set = repo.changes(Some("main"));
         assert_eq!(set.base.as_deref(), Some("main"));
@@ -547,7 +547,7 @@ mod tests {
     #[test]
     fn diffs_return_both_sides_of_a_file() {
         let repo = Repo::new();
-        repo.run(&["checkout", "-q", "-b", "sy/work"]);
+        repo.run(&["checkout", "-q", "-b", "ys/work"]);
         repo.write("README.md", "# project\n\ncommitted edit\n");
         repo.commit("edit");
         repo.write("README.md", "# project\n\nuncommitted edit\n");

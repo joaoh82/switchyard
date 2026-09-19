@@ -21,7 +21,7 @@ dialogs and menus.
 Because plain `Ctrl`+letter belongs to the program in the terminal. `Ctrl+B` moves back a
 character in a shell and is the tmux prefix; `Ctrl+W` deletes a word; `Ctrl+T` transposes;
 `Ctrl+C` interrupts. An app that takes those away makes its terminal worse than a real one.
-`Ctrl+Shift` is what terminal emulators have always used for their own commands, so Switchyard
+`Ctrl+Shift` is what terminal emulators have always used for their own commands, so Yardsort
 does too. On macOS `⌘` never reaches the terminal, so it is free to use.
 
 Shortcuts follow the character your keyboard layout produces, not the physical key, so they match

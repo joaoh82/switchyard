@@ -5,7 +5,7 @@ A **workspace** is one line of work inside a project: a git branch, checked out 
 Because each workspace has its own folder, agents working in parallel never step on each other —
 or on you.
 
-Workspaces are plain git. Everything Switchyard does you can inspect with `git worktree list` and
+Workspaces are plain git. Everything Yardsort does you can inspect with `git worktree list` and
 `git branch`, and nothing stops you using those folders from any other tool.
 
 ## Starting one: the composer
@@ -25,11 +25,11 @@ Press **+** on a project row, or `Ctrl+Shift+N` / `⌘N` for the project you are
 Your last choices are remembered per project. **Nothing is created until you press Start** —
 cancelling (`Esc`) leaves no trace.
 
-On Start, Switchyard:
+On Start, Yardsort:
 
 1. names the workspace from your message (`Add a --units flag…` → `add-units-flag`), making it
    unique if needed;
-2. runs `git worktree add` with a new branch, `sy/add-units-flag` by default;
+2. runs `git worktree add` with a new branch, `ys/add-units-flag` by default;
 3. starts the agent there with your message.
 
 If the agent cannot be started — not installed, say — the worktree and the new branch are taken
@@ -37,7 +37,7 @@ back, so a failed attempt leaves nothing behind. A branch that existed before is
 
 ### Where the folders go
 
-`~/switchyard/<project>/<workspace>` by default. Change the folder and the `sy/` branch prefix in
+`~/yardsort/<project>/<workspace>` by default. Change the folder and the `ys/` branch prefix in
 [Settings → Workspaces](settings.md#workspaces). Changing them affects new workspaces only.
 
 ### Files git does not track
@@ -49,7 +49,7 @@ need in a shell tab.
 ## Worktrees made elsewhere
 
 Worktrees you created by hand, or with another tool, show up as workspaces automatically the next
-time the project is listed. Nothing is moved or changed; Switchyard just learns about them.
+time the project is listed. Nothing is moved or changed; Yardsort just learns about them.
 
 ## The workspace menu
 
@@ -78,10 +78,10 @@ never throws away commits. Delete the branch yourself with git if you want it go
 ### Uncommitted work is protected
 
 Archiving and deleting both remove a folder, and uncommitted changes live only there. If there
-are any, Switchyard stops and asks again, saying plainly that the work will be lost for good.
+are any, Yardsort stops and asks again, saying plainly that the work will be lost for good.
 Nothing is destroyed on the first click.
 
 ## When a workspace's folder disappears
 
-If the folder is deleted behind Switchyard's back, the workspace is marked **missing**. Its menu
+If the folder is deleted behind Yardsort's back, the workspace is marked **missing**. Its menu
 offers **Restore from its branch** (check it out again in the same place) or **Delete**.

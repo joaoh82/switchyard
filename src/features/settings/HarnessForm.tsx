@@ -16,7 +16,7 @@ const ARG_FIELDS = [
   ["baseArgs", "Always", "Passed on every launch."],
   ["modelArgs", "Model", "Used when a model is chosen. {model}"],
   ["effortArgs", "Effort", "Used when an effort level is chosen. {effort}"],
-  ["sessionArgs", "Session id", "Used when Switchyard assigns the session id. {session_id}"],
+  ["sessionArgs", "Session id", "Used when Yardsort assigns the session id. {session_id}"],
   ["promptArgs", "Prompt", "Used when there is an opening message (argv transport). {prompt}"],
   ["resumeArgs", "Resume", "Replace the session and prompt args when resuming. {session_id}"],
   ["forkArgs", "Fork", "Replace them when forking a session. {session_id}"],
@@ -267,7 +267,7 @@ export function HarnessForm({ harness, isNew, onSaved, onRemoved }: Props) {
           label="Session id"
           hint={
             draft.sessionIdMode === "assigned"
-              ? "Switchyard chooses the id up front, so resume is exact."
+              ? "Yardsort chooses the id up front, so resume is exact."
               : "The harness chooses; resume means its latest session in the workspace folder."
           }
         >
@@ -276,7 +276,7 @@ export function HarnessForm({ harness, isNew, onSaved, onRemoved }: Props) {
             onChange={(e) => set({ sessionIdMode: e.target.value as Draft["sessionIdMode"] })}
             className={inputClass}
           >
-            <option value="assigned">assigned by Switchyard</option>
+            <option value="assigned">assigned by Yardsort</option>
             <option value="latestInCwd">chosen by the harness</option>
           </select>
         </Field>

@@ -1,7 +1,7 @@
 # Terminals & sessions
 
 The middle of the window is a real terminal. Agents run in it exactly as they do anywhere else —
-Switchyard does not re-implement their interface or read their output.
+Yardsort does not re-implement their interface or read their output.
 
 ## Tabs
 
@@ -48,7 +48,7 @@ silence really does mean "your turn".
 
 ## Notifications
 
-When an agent has been busy for a while (eight seconds or more), goes quiet, and Switchyard is
+When an agent has been busy for a while (eight seconds or more), goes quiet, and Yardsort is
 **not** the window you are looking at, you get a desktop notification: _"claude is waiting —
 project / workspace"_. Shells never notify, and neither does anything you are watching.
 
@@ -56,9 +56,9 @@ Turn it off in [Settings → General](settings.md#general).
 
 ## Sessions: resume and fork
 
-Agents save their conversations on disk. Switchyard keeps a **record** of each one — which agent,
+Agents save their conversations on disk. Yardsort keeps a **record** of each one — which agent,
 which conversation, your first message as its title — so you can return to it after the process
-is gone: because you closed the tab, the agent exited, or you quit Switchyard.
+is gone: because you closed the tab, the agent exited, or you quit Yardsort.
 
 ### Resume
 
@@ -69,8 +69,8 @@ Same conversation, new process.
 
 ![Previous sessions](../images/sessions.png)
 
-After restarting Switchyard nothing is started for you — you choose what to bring back. Sessions
-that were running when Switchyard closed are labelled _interrupted_; they resume like any other.
+After restarting Yardsort nothing is started for you — you choose what to bring back. Sessions
+that were running when Yardsort closed are labelled _interrupted_; they resume like any other.
 
 ### Fork
 
@@ -80,14 +80,14 @@ the list or the bar, and a running one by right-clicking its tab.
 
 ### Forget
 
-**×** on a previous session removes it from Switchyard's list. The agent's own saved conversation
+**×** on a previous session removes it from Yardsort's list. The agent's own saved conversation
 is not touched.
 
 ### What can be resumed
 
 | Agent             | Resume / fork                                                                                                                                                                                                                                      |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude Code, Grok | Any recorded session. Switchyard chooses the conversation's id up front, so it can always name it.                                                                                                                                                 |
+| Claude Code, Grok | Any recorded session. Yardsort chooses the conversation's id up front, so it can always name it.                                                                                                                                                   |
 | Codex, OpenCode   | The **most recent** conversation in the workspace. These agents choose their own ids, and "continue the latest one here" is the only handle they offer. Older entries say so rather than offering a button that would open the wrong conversation. |
 
 If a session cannot be continued — its agent was disabled or removed in settings, for example —

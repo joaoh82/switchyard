@@ -1,4 +1,4 @@
-# Switchyard — design docs
+# Yardsort — design docs
 
 Initial planning, written 2026-09-17. These are living documents: update them as decisions get made,
 and move anything settled out of [open questions](06-open-questions.md) into the relevant doc.
@@ -17,7 +17,7 @@ and move anything settled out of [open questions](06-open-questions.md) into the
 
 | Term          | Meaning                                                                                                        |
 | ------------- | -------------------------------------------------------------------------------------------------------------- |
-| **Project**   | A git repository on disk that Switchyard knows about.                                                          |
+| **Project**   | A git repository on disk that Yardsort knows about.                                                            |
 | **Workspace** | One unit of parallel work inside a project: a git worktree + branch + harness session(s).                      |
 | **Local**     | The always-present pseudo-workspace that points at the project's own checkout (the repo root), not a worktree. |
 | **Harness**   | A terminal-based coding agent CLI (Claude Code, Codex, Grok, OpenCode, …).                                     |

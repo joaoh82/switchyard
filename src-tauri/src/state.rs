@@ -43,10 +43,10 @@ impl AppState {
     }
 
     /// Where worktrees go: the environment override (for tests and experiments), then the
-    /// setting, then `~/switchyard` — visible and short on purpose: people look into these
+    /// setting, then `~/yardsort` — visible and short on purpose: people look into these
     /// folders, and Windows paths are limited.
     pub fn worktree_root(&self) -> IpcResult<PathBuf> {
-        if let Some(dir) = std::env::var_os("SWITCHYARD_WORKTREE_ROOT").filter(|d| !d.is_empty()) {
+        if let Some(dir) = crate::legacy::env_var_os("WORKTREE_ROOT") {
             return Ok(PathBuf::from(dir));
         }
         if let Some(root) = self.settings.get().workspaces.worktree_root {
@@ -58,7 +58,7 @@ impl AppState {
     pub fn default_worktree_root(&self) -> IpcResult<PathBuf> {
         self.env()
             .home_dir()
-            .map(|home| home.join("switchyard"))
+            .map(|home| home.join("yardsort"))
             .ok_or_else(|| IpcError::new("no_home", "Cannot determine your home directory."))
     }
 

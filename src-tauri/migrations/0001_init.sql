@@ -1,4 +1,4 @@
--- Projects are git repositories Switchyard knows about. Removing one never touches the disk.
+-- Projects are git repositories Yardsort knows about. Removing one never touches the disk.
 CREATE TABLE projects (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,

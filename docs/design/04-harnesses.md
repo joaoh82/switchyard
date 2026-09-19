@@ -1,6 +1,6 @@
 # 04 — Harnesses
 
-A **harness** is a terminal coding agent. To Switchyard it is pure configuration: a command plus
+A **harness** is a terminal coding agent. To Yardsort it is pure configuration: a command plus
 argument templates for the handful of things we need to do with it. Every supported agent has the
 same shape because they all run in a terminal and all take roughly the same startup options.
 
@@ -114,7 +114,7 @@ Notes:
 - Codex `resume` / `fork` are **subcommands**, not flags — which is exactly why resume and fork are
   full arg lists rather than "extra flags appended to the start args". `resume --last` filters by
   cwd by default (there is an `--all` flag to disable that), which is what makes `latest-in-cwd` work.
-- Claude and Grok both have their own `--worktree` flag. We don't use it: Switchyard owns worktree
+- Claude and Grok both have their own `--worktree` flag. We don't use it: Yardsort owns worktree
   creation so behaviour is identical across harnesses.
 - **Gemini CLI** (0.60.0) is also installed and fits the same shape — `-m`, `-i {prompt}` for
   "prompt then stay interactive", `--session-id`, `--resume latest`. Cheap fifth default.
@@ -138,18 +138,18 @@ disabled / not found) and whether it is `modified` or `custom`. The form edits o
 ### The file
 
 `settings.toml` lives in the OS config directory (next to the database when
-`SWITCHYARD_DATA_DIR` is set). It is meant to be readable and hand-editable:
+`YARDSORT_DATA_DIR` is set). It is meant to be readable and hand-editable:
 
 ```toml
 [workspaces]
-worktree_root = "/data/worktrees"      # default: ~/switchyard
-branch_prefix = "sy"                   # "" for none
+worktree_root = "/data/worktrees"      # default: ~/yardsort
+branch_prefix = "ys"                   # "" for none
 
 [[harness]]                            # a built-in: only what differs is stored
 id = "claude"
 base_args = ["--append-system-prompt", "Be brief."]
 
-[[harness]]                            # an id Switchyard does not ship is a custom harness
+[[harness]]                            # an id Yardsort does not ship is a custom harness
 id = "aider"
 label = "Aider"
 command = "aider"

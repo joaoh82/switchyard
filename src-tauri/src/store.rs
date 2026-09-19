@@ -21,7 +21,7 @@ pub enum StoreError {
     Sqlite(#[from] rusqlite::Error),
     #[error("cannot create the data directory: {0}")]
     Io(#[from] std::io::Error),
-    #[error("this database was written by a newer version of Switchyard (schema {found}, this build knows {known})")]
+    #[error("this database was written by a newer version of Yardsort (schema {found}, this build knows {known})")]
     TooNew { found: usize, known: usize },
 }
 
@@ -42,7 +42,7 @@ pub struct WorkspaceRow {
     pub name: String,
     pub path: String,
     pub branch: Option<String>,
-    /// The branch this workspace's branch was created from. `None` when Switchyard did not
+    /// The branch this workspace's branch was created from. `None` when Yardsort did not
     /// create the branch (an existing branch was opened, or a worktree was adopted) — which also
     /// means the branch is not ours to delete when undoing.
     pub base_branch: Option<String>,
@@ -552,10 +552,10 @@ mod tests {
         let store = Store::in_memory();
         let project = store.add_project("app", "/code/app").unwrap();
         let first = store
-            .add_worktree(&project.id, "one", "/wt/one", Some("sy/one"), Some("main"))
+            .add_worktree(&project.id, "one", "/wt/one", Some("ys/one"), Some("main"))
             .unwrap();
         store
-            .add_worktree(&project.id, "two", "/wt/two", Some("sy/two"), Some("main"))
+            .add_worktree(&project.id, "two", "/wt/two", Some("ys/two"), Some("main"))
             .unwrap();
 
         let names: Vec<_> = store
@@ -577,11 +577,11 @@ mod tests {
     }
 
     #[test]
-    fn a_worktree_remembers_whether_switchyard_created_its_branch() {
+    fn a_worktree_remembers_whether_yardsort_created_its_branch() {
         let store = Store::in_memory();
         let project = store.add_project("app", "/code/app").unwrap();
         let ours = store
-            .add_worktree(&project.id, "a", "/wt/a", Some("sy/a"), Some("main"))
+            .add_worktree(&project.id, "a", "/wt/a", Some("ys/a"), Some("main"))
             .unwrap();
         let theirs = store
             .add_worktree(&project.id, "b", "/wt/b", Some("feature"), None)
@@ -624,7 +624,7 @@ mod tests {
     #[test]
     fn upgrading_removes_duplicate_workspaces_left_by_the_adoption_race() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("switchyard.db");
+        let path = dir.path().join("yardsort.db");
         {
             // A database as version 1 left it: the same worktree recorded twice.
             let conn = Connection::open(&path).unwrap();
@@ -657,7 +657,7 @@ mod tests {
     fn worktree(store: &Store) -> WorkspaceRow {
         let project = store.add_project("app", "/code/app").unwrap();
         store
-            .add_worktree(&project.id, "fix", "/wt/fix", Some("sy/fix"), Some("main"))
+            .add_worktree(&project.id, "fix", "/wt/fix", Some("ys/fix"), Some("main"))
             .unwrap()
     }
 
@@ -796,7 +796,7 @@ mod tests {
     #[test]
     fn data_survives_reopening_and_migrations_run_once() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("nested").join("switchyard.db");
+        let path = dir.path().join("nested").join("yardsort.db");
         Store::open(&path)
             .unwrap()
             .add_project("app", "/code/app")
@@ -808,7 +808,7 @@ mod tests {
     #[test]
     fn a_database_from_the_future_is_refused_not_mangled() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("switchyard.db");
+        let path = dir.path().join("yardsort.db");
         drop(Store::open(&path).unwrap());
         Connection::open(&path)
             .unwrap()

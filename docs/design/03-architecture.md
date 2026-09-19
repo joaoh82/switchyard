@@ -99,7 +99,7 @@ kill(SessionId, signal)                 events: output, exit, activity
 ```
 
 - **v1:** the host runs in-process; "transport" is a function call plus a Tauri channel.
-- **Later:** the same host runs as a separate process (`switchyardd`), the transport becomes a
+- **Later:** the same host runs as a separate process (`yardsortd`), the transport becomes a
   local socket (Unix domain socket / Windows named pipe), and the app becomes one client of it.
   Nothing above the boundary changes.
 - Rules that keep this cheap: the host depends on nothing from Tauri or the UI; every request and
@@ -131,15 +131,15 @@ launched from a desktop launcher, `PATH` will be missing mise/asdf/nvm/cargo/hom
 `claude` or `codex` simply won't be found even though they work in the user's terminal. (On the
 machine this was planned on, every harness is installed via mise.)
 
-- **Unix**: at startup run the user's login shell once — `$SHELL -i -l -c '<switchyard>
---switchyard-print-env'` — with a timeout. Asking our own binary to dump the environment (between
+- **Unix**: at startup run the user's login shell once — `$SHELL -i -l -c '<yardsort>
+--yardsort-print-env'` — with a timeout. Asking our own binary to dump the environment (between
   markers, NUL-separated) avoids depending on `env -0` or any shell's syntax, and ignores whatever
   the startup files print. The result is cached and is the _whole_ environment of every spawn;
   `env_info(reload: true)` re-runs it.
 - **Windows**: use the process environment; re-read user/system `PATH` from the registry on reload.
 - Resolve the harness `command` against that `PATH` ourselves so "not found" becomes a clear,
   actionable error in the UI (with the PATH we searched), not a silent dead terminal.
-- Set `TERM=xterm-256color`, `COLORTERM=truecolor`, and `SWITCHYARD_WORKSPACE`, `SWITCHYARD_PROJECT`
+- Set `TERM=xterm-256color`, `COLORTERM=truecolor`, and `YARDSORT_WORKSPACE`, `YARDSORT_PROJECT`
   for scripts and hooks.
 
 Harnesses are spawned **directly with an argv array — never through a shell string.** This removes
@@ -161,11 +161,11 @@ Operations needed for v1, all via the CLI with `--porcelain` / `-z` output where
 
 Decisions:
 
-- **Worktree location**: outside the repo, under a Switchyard-owned root —
+- **Worktree location**: outside the repo, under a Yardsort-owned root —
   `<data-dir>/worktrees/<project-slug>/<workspace-slug>`; configurable. Keeping it outside avoids
   polluting the repo and confusing tools that walk the tree. Keep the path **short** — Windows'
   260-char limit bites deep `node_modules` trees (also recommend `core.longpaths=true` there).
-- **Branch naming**: `<prefix>/<workspace-slug>`, prefix default `sy`, configurable.
+- **Branch naming**: `<prefix>/<workspace-slug>`, prefix default `ys`, configurable.
 - **Reconciliation**: on startup and on focus, compare the DB with `git worktree list`. Worktrees
   deleted behind our back are marked _missing_, not silently dropped.
 - **Deleting** a workspace with uncommitted or unmerged work requires explicit confirmation that
@@ -175,7 +175,7 @@ Decisions:
 
 ## Data model (SQLite)
 
-`switchyard.db` in the OS app-data directory (override with `SWITCHYARD_DATA_DIR`). Migrations are
+`yardsort.db` in the OS app-data directory (override with `YARDSORT_DATA_DIR`). Migrations are
 numbered SQL files in `src-tauri/migrations/`, applied in order and tracked with `user_version`; a
 database written by a newer build is refused rather than touched.
 
@@ -229,7 +229,7 @@ which is why the [roadmap](05-roadmap.md) proves it on all three platforms befor
 ## Repo layout
 
 ```
-switchyard/
+yardsort/
 ├─ Cargo.toml                # cargo workspace root (shared target/, lints, release profile)
 ├─ docs/
 ├─ src/                      # frontend
@@ -243,7 +243,7 @@ switchyard/
 │  ├─ migrations/
 │  └─ tauri.conf.json
 ├─ crates/
-│  └─ pty-host/              # no Tauri deps; in-process now, `switchyardd` later (M1)
+│  └─ pty-host/              # no Tauri deps; in-process now, `yardsortd` later (M1)
 └─ .github/workflows/        # check + bundle matrix: ubuntu, macos, windows
 ```
 

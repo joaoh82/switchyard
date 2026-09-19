@@ -1,32 +1,32 @@
 <div align="center">
   <img src="assets/icon.svg" width="96" alt="" />
-  <h1>Switchyard</h1>
+  <h1>Yardsort</h1>
   <p><strong>Run AI coding agents in parallel — each on its own track.</strong></p>
   <p>
     A desktop app for Linux, macOS and Windows that gives every task its own git worktree and its
     own terminal, running the coding agent of your choice.
   </p>
   <p>
-    <a href="https://github.com/joaoh82/switchyard/releases/latest">Download</a> ·
+    <a href="https://github.com/joaoh82/yardsort/releases/latest">Download</a> ·
     <a href="docs/quick-start.md">Quick start</a> ·
     <a href="docs/README.md">Documentation</a> ·
     <a href="CONTRIBUTING.md">Contributing</a>
   </p>
   <p>
-    <a href="https://github.com/joaoh82/switchyard/actions/workflows/ci.yml"><img src="https://github.com/joaoh82/switchyard/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+    <a href="https://github.com/joaoh82/yardsort/actions/workflows/ci.yml"><img src="https://github.com/joaoh82/yardsort/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue.svg" alt="License: GPL-3.0" /></a>
-    <a href="https://github.com/joaoh82/switchyard/releases/latest"><img src="https://img.shields.io/github/v/release/joaoh82/switchyard?include_prereleases&label=release" alt="Latest release" /></a>
+    <a href="https://github.com/joaoh82/yardsort/releases/latest"><img src="https://img.shields.io/github/v/release/joaoh82/yardsort?include_prereleases&label=release" alt="Latest release" /></a>
   </p>
 </div>
 
-![Switchyard: projects and workspaces on the left, an agent's terminal in the middle, its changes and a diff on the right](docs/images/overview.png)
+![Yardsort: projects and workspaces on the left, an agent's terminal in the middle, its changes and a diff on the right](docs/images/overview.png)
 
 ## What it is
 
-A switchyard is where rail cars are sorted onto parallel tracks and later joined back into one
+A sorting yard is where rail cars are sorted onto parallel tracks and later joined back into one
 train. That is the job: fan work out onto parallel branches, then merge it back.
 
-You describe a task, pick an agent, and press Enter. Switchyard creates a branch and a **git
+You describe a task, pick an agent, and press Enter. Yardsort creates a branch and a **git
 worktree** for it — a separate folder — and starts the agent there in a real terminal. Start
 another, and another. They cannot disturb each other, or your own checkout. On the right you
 watch the files each one touches, live, with diffs.
@@ -39,7 +39,7 @@ It is modeled on tools like Conductor and Superset, with the requirement they do
 - **Any terminal agent.** Claude Code, Codex, Grok and OpenCode out of the box; add any other
   with a few lines of configuration — no plugin, no release to wait for.
 - **The terminal is the truth.** Agents run in a real PTY with their own interface. Whatever they
-  can do in your terminal, they can do here — and Switchyard never parses their output.
+  can do in your terminal, they can do here — and Yardsort never parses their output.
 - **Plain git, no lock-in.** Workspaces are ordinary worktrees and branches. Inspect or undo
   anything with `git`. Worktrees made elsewhere are picked up automatically.
 - **Pick up where you left off.** Quit mid-task, come back, press **Resume** — the conversation is
@@ -51,7 +51,7 @@ It is modeled on tools like Conductor and Superset, with the requirement they do
 - **Careful with your work.** Deleting or archiving a workspace always keeps the branch, and
   never discards uncommitted changes without a second, explicit confirmation.
 - **Private by construction.** No account, no telemetry, no keys. Agents use their own logins;
-  Switchyard just starts them.
+  Yardsort just starts them.
 - **Light.** Built with [Tauri](https://tauri.app) and Rust: a few megabytes, not a bundled browser.
 
 <table>
@@ -67,7 +67,7 @@ It is modeled on tools like Conductor and Superset, with the requirement they do
 
 ## Install
 
-Download the latest build from the [**Releases page**](https://github.com/joaoh82/switchyard/releases/latest):
+Download the latest build from the [**Releases page**](https://github.com/joaoh82/yardsort/releases/latest):
 
 | System      | File                                                                          |
 | ----------- | ----------------------------------------------------------------------------- |
@@ -76,12 +76,12 @@ Download the latest build from the [**Releases page**](https://github.com/joaoh8
 | **Windows** | `-setup.exe` or `.msi` — not code-signed yet: choose _More info → Run anyway_ |
 
 You also need **git** and at least one agent CLI that already works in your terminal (for
-example [Claude Code](https://claude.com/claude-code)). Switchyard does not bundle agents and
+example [Claude Code](https://claude.com/claude-code)). Yardsort does not bundle agents and
 never sees their credentials.
 
 ## Quick start
 
-1. Open Switchyard and press **+** next to _Projects_ → **Open a folder** → choose a git repository.
+1. Open Yardsort and press **+** next to _Projects_ → **Open a folder** → choose a git repository.
 2. Press **+** on the project (or `Ctrl+Shift+N` / `⌘N`), type what you want done, press **Enter**.
 3. Watch the agent in the middle, and its changes on the right. Start more workspaces in parallel.
 4. The result is an ordinary git branch — review it, push it, open a PR.
@@ -108,7 +108,7 @@ You need [Rust](https://rustup.rs) (stable), [Bun](https://bun.sh), git,
 [system dependencies](https://tauri.app/start/prerequisites/) for your OS.
 
 ```sh
-git clone https://github.com/joaoh82/switchyard && cd switchyard
+git clone https://github.com/joaoh82/yardsort && cd yardsort
 just setup     # install dependencies
 just dev       # run with hot reload
 just check     # formatting, lints, types, all tests
@@ -122,7 +122,7 @@ out and how to send a change.
 
 Early, and moving fast. The core loop — projects, parallel workspaces, configurable agents, live
 review, resumable sessions — works on all three platforms and is covered by CI on each. Expect
-rough edges, and please [report them](https://github.com/joaoh82/switchyard/issues/new/choose).
+rough edges, and please [report them](https://github.com/joaoh82/yardsort/issues/new/choose).
 The [roadmap](docs/design/05-roadmap.md) says what is next.
 
 ## Contributing
@@ -132,8 +132,11 @@ Issues, ideas and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTI
 
 ## License
 
-[GPL-3.0](LICENSE). Switchyard is free software: you may use, study, share and change it, and
+[GPL-3.0](LICENSE). Yardsort is free software: you may use, study, share and change it, and
 versions you distribute must stay free under the same terms.
 
-Switchyard is an independent project, not affiliated with Anthropic, OpenAI, xAI or any other
+Yardsort was called **Switchyard** until v0.2; if you used that, your projects and settings come
+along automatically the first time you start Yardsort.
+
+Yardsort is an independent project, not affiliated with Anthropic, OpenAI, xAI or any other
 maker of the agents it can launch. Product names belong to their owners.

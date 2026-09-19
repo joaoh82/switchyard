@@ -30,7 +30,7 @@ settled.
    the WSL filesystem)? Lean: native first; treat WSL as a per-harness command prefix + path
    translation, designed in M4, built when someone needs it.
 8. ~~**Worktree root default.**~~ **Settled in M3:** visible and short —
-   `~/switchyard/<project>/<workspace>`; `SWITCHYARD_WORKTREE_ROOT` overrides it, and M4 makes it
+   `~/yardsort/<project>/<workspace>`; `YARDSORT_WORKTREE_ROOT` overrides it, and M4 makes it
    a setting.
 9. ~~**Diff viewer.**~~ **Settled in M5:** CodeMirror 6 with its unified merge view — light, themable
    from our CSS variables, and one component serves both the diff and the read-only file viewer.
@@ -44,6 +44,10 @@ settled.
 ## Project
 
 13. ~~**Licence.**~~ **Settled 2026-09-18: GPL-3.0**, and the project is open source from v0.1.
-14. **Name availability.** Check `switchyard` on GitHub, crates.io, npm, the AUR and domains before
-    investing in branding. Fallback app id: `dev.switchyard.app`.
+14. ~~**Name availability.**~~ **Settled 2026-09-19: renamed from Switchyard to Yardsort.** Every
+    Switchyard domain worth having was taken, as were the GitHub, crates.io, npm and AUR names, and
+    other products already use the name. `yardsort` was free everywhere checked (.com/.dev/.app/
+    .net, GitHub, crates.io, npm, AUR, PyPI, RubyGems, Homebrew) and keeps the metaphor: a sorting
+    yard is where cars are sorted onto parallel tracks. App id `dev.yardsort.app`, branch prefix
+    `ys`. `legacy.rs` carries data over from the old app id and keeps `SWITCHYARD_*` working.
 15. **Distribution.** Open source from the start? Flatpak/Snap in addition to AppImage/deb/rpm/AUR?

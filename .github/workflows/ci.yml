@@ -105,7 +105,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: switchyard-${{ runner.os }}-${{ github.sha }}
+          name: yardsort-${{ runner.os }}-${{ github.sha }}
           if-no-files-found: error
           retention-days: 14
           path: |

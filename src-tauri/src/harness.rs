@@ -1,6 +1,6 @@
 //! Harnesses: terminal coding agents, described as pure configuration.
 //!
-//! A definition is a command plus argument templates for the few things Switchyard needs to do
+//! A definition is a command plus argument templates for the few things Yardsort needs to do
 //! with an agent. Adding one must never need code — M4 makes these user-editable; until then the
 //! built-ins below are all there is. See `docs/design/04-harnesses.md`.
 
@@ -183,7 +183,7 @@ fn strings(items: &[&str]) -> Vec<String> {
     items.iter().map(|s| (*s).to_owned()).collect()
 }
 
-/// The harnesses Switchyard knows out of the box. Flags verified against each CLI's `--help`
+/// The harnesses Yardsort knows out of the box. Flags verified against each CLI's `--help`
 /// (versions in `docs/design/04-harnesses.md`); they move, so M4 lets users correct them.
 pub fn builtin() -> Vec<HarnessDef> {
     vec![
@@ -275,7 +275,7 @@ pub fn builtin() -> Vec<HarnessDef> {
 }
 
 /// What the settings file says about one harness. For a built-in this is a *partial* override:
-/// only the fields the user changed are stored, so corrected defaults in a newer Switchyard
+/// only the fields the user changed are stored, so corrected defaults in a newer Yardsort
 /// still reach everything they left alone — and "restore defaults" is deleting the entry. For a
 /// custom harness the entry is the whole definition, missing fields being blank.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

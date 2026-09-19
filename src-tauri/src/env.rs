@@ -12,9 +12,9 @@ use serde::Serialize;
 use specta::Type;
 
 /// Makes this executable print its environment and exit. See [`print_env_and_exit_if_asked`].
-const PRINT_ENV_FLAG: &str = "--switchyard-print-env";
-const BEGIN: &[u8] = b"\0SWITCHYARD-ENV-BEGIN\0";
-const END: &[u8] = b"\0SWITCHYARD-ENV-END\0";
+const PRINT_ENV_FLAG: &str = "--yardsort-print-env";
+const BEGIN: &[u8] = b"\0YARDSORT-ENV-BEGIN\0";
+const END: &[u8] = b"\0YARDSORT-ENV-END\0";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -34,7 +34,7 @@ pub struct ShellEnv {
 }
 
 /// Variables by which a coding agent tells its children "you are running inside my session".
-/// When Switchyard itself was started from a terminal inside an agent (say, `just dev` run by
+/// When Yardsort itself was started from a terminal inside an agent (say, `just dev` run by
 /// Claude Code), they would leak into every harness we launch, which then behaves as a nested
 /// child — Claude Code, for one, stops saving its transcript, so the session can never be
 /// resumed. They describe a process that is not ours; user configuration is left alone.

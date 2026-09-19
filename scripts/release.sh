@@ -38,11 +38,11 @@ if git diff --cached --quiet; then
 else
   git commit -m "Release $tag"
 fi
-git tag -a "$tag" -m "Switchyard $tag"
+git tag -a "$tag" -m "Yardsort $tag"
 git push origin main "$tag"
 
 echo
 echo "Pushed $tag. The Release workflow is building installers; it publishes the release by"
 echo "itself once every platform has succeeded (about 20 minutes):"
-echo "  https://github.com/joaoh82/switchyard/actions/workflows/release.yml"
-echo "  https://github.com/joaoh82/switchyard/releases"
+echo "  https://github.com/joaoh82/yardsort/actions/workflows/release.yml"
+echo "  https://github.com/joaoh82/yardsort/releases"

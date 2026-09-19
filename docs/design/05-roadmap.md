@@ -65,9 +65,9 @@ Two follow-ups landed right after M3, from dogfooding:
 
 - **Open an existing branch.** The composer's branch picker has two groups: _New branch from…_ and
   _Open existing branch_ (only branches nobody has checked out — git allows a branch in one worktree
-  at a time). This is how a branch kept by a delete comes back as a workspace. Switchyard never
+  at a time). This is how a branch kept by a delete comes back as a workspace. Yardsort never
   deletes a branch it did not create, not even when undoing a failed start.
-- **Adoption.** Whenever projects are listed, worktrees git knows about but Switchyard does not
+- **Adoption.** Whenever projects are listed, worktrees git knows about but Yardsort does not
   become workspaces — ones made by hand, and ones orphaned when their project was removed and added
   again. Stale ("prunable") entries are skipped. This brought forward part of M6's reconciliation.
 
@@ -78,7 +78,7 @@ Two follow-ups landed right after M3, from dogfooding:
 - `stdin` prompt transport with readiness detection.
 - Re-verify every default in [04-harnesses](04-harnesses.md) end-to-end on each OS.
 
-_Exit:_ a harness Switchyard has never heard of can be added and used without touching code.
+_Exit:_ a harness Yardsort has never heard of can be added and used without touching code.
 
 _Notes:_ the settings file stores only differences from the built-ins, so corrected defaults in a
 later version still reach everything the user left alone. Settings also cover the worktree folder
@@ -126,7 +126,7 @@ _Notes:_
 - Harnesses that choose their own session ids (Codex, OpenCode) can only continue their most recent
   conversation in a folder; older records say so instead of offering a Resume that would open the
   wrong one. Reading their session stores would lift this (open question 12).
-- Found while testing: when Switchyard is started from a terminal inside an agent, that agent's
+- Found while testing: when Yardsort is started from a terminal inside an agent, that agent's
   session markers (`CLAUDECODE`, `CLAUDE_CODE_CHILD_SESSION`, …) leaked into the harnesses, and
   Claude Code then refuses to save its transcript. The launch environment now drops them.
 
@@ -145,12 +145,15 @@ Done:
 
 To do:
 
-- [x] **v0.1.0 released** (2026-09-19): first public release, built by the release workflow on its
+- [x] **v0.1.0 released** (2026-09-19, under the project's first name, _Switchyard_): first public release, built by the release workflow on its
       first run. The macOS build is signed with a Developer ID certificate and notarized by Apple.
 - [ ] Hands-on pass and benchmark rows on macOS and Windows hardware.
 - [ ] Auto-update (Tauri updater): needs an update-signing key whose private half must be kept
       safe forever — losing it strands every installed copy — so it is a deliberate step.
-- [ ] Package managers: AUR, Homebrew cask, winget; Flatpak.
+- [x] **Renamed to Yardsort** (v0.2.0): the Switchyard name was taken everywhere that matters — see
+      open question 14. Existing users' data is carried over on first launch.
+- [ ] AUR package (`yardsort-bin`), published by the release workflow.
+- [ ] Other package managers: Homebrew cask, winget; Flatpak.
 - [ ] Windows code signing, if funding appears.
 - [ ] First-run experience: detect missing git / no agents installed and say what to do.
 - [ ] Project website.
@@ -161,7 +164,7 @@ _Exit:_ v0.1.0 public release.
 
 - Commit / push / open PR from the UI; show PR + CI status on the workspace row.
 - Per-project setup script and "files to copy into new worktrees" (`.env` etc.); run/dev-server button.
-- `switchyardd`: move the PTY host out of process so agents survive closing the window
+- `yardsortd`: move the PTY host out of process so agents survive closing the window
   (boundary already in place from M1; see open questions for lifecycle).
 - Merge / rebase helpers; "apply this workspace onto local".
 - Diff comments sent back to the agent as a prompt.

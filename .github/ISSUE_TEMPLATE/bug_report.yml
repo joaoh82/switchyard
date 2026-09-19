@@ -16,8 +16,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: Switchyard version
-      description: Bottom-right corner of the window, e.g. "Switchyard 0.1.0 · linux/x86_64".
+      label: Yardsort version
+      description: Bottom-right corner of the window, e.g. "Yardsort 0.1.0 · linux/x86_64".
     validations:
       required: true
   - type: dropdown
@@ -42,5 +42,5 @@ body:
     id: logs
     attributes:
       label: Logs or screenshots
-      description: Starting Switchyard from a terminal shows its log. Please remove anything private.
+      description: Starting Yardsort from a terminal shows its log. Please remove anything private.
       render: text

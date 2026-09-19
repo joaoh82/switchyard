@@ -42,7 +42,7 @@ export const worktree = (
   kind: "worktree",
   name,
   path: `/worktrees/${projectName}/${name}`,
-  head: { label: `sy/${name}`, detached: false, unborn: false },
+  head: { label: `ys/${name}`, detached: false, unborn: false },
   missing: false,
   archived: false,
   ...overrides,

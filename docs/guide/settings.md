@@ -4,18 +4,18 @@ Open with the **Settings** button at the bottom of the left panel, or `Ctrl+Shif
 
 Settings are stored in a plain TOML file you can read, back up and edit:
 
-| System  | Location                                                         |
-| ------- | ---------------------------------------------------------------- |
-| Linux   | `~/.config/dev.switchyard.app/settings.toml`                     |
-| macOS   | `~/Library/Application Support/dev.switchyard.app/settings.toml` |
-| Windows | `%APPDATA%\dev.switchyard.app\settings.toml`                     |
+| System  | Location                                                       |
+| ------- | -------------------------------------------------------------- |
+| Linux   | `~/.config/dev.yardsort.app/settings.toml`                     |
+| macOS   | `~/Library/Application Support/dev.yardsort.app/settings.toml` |
+| Windows | `%APPDATA%\dev.yardsort.app\settings.toml`                     |
 
-If the file cannot be parsed, Switchyard says so, runs on defaults, and keeps your file as
+If the file cannot be parsed, Yardsort says so, runs on defaults, and keeps your file as
 `settings.toml.unreadable` instead of overwriting it.
 
 ## Harnesses
 
-A **harness** is a coding agent that runs in a terminal. To Switchyard a harness is pure
+A **harness** is a coding agent that runs in a terminal. To Yardsort a harness is pure
 configuration — a command and some argument templates — so any agent can be added without
 waiting for a new release.
 
@@ -33,13 +33,13 @@ its command was found on your `PATH`.
 | **Always args**      | Passed on every launch — the place for flags you always want, such as a permission mode.                                                                                                                                                                 |
 | **Model args**       | Used when a model is chosen, e.g. `--model {model}`.                                                                                                                                                                                                     |
 | **Effort args**      | Used when an effort level is chosen, e.g. `--effort {effort}`.                                                                                                                                                                                           |
-| **Session id args**  | Used when Switchyard assigns the conversation's id, e.g. `--session-id {session_id}`.                                                                                                                                                                    |
+| **Session id args**  | Used when Yardsort assigns the conversation's id, e.g. `--session-id {session_id}`.                                                                                                                                                                      |
 | **Prompt args**      | How the first message is passed, e.g. `{prompt}` or `--prompt {prompt}`.                                                                                                                                                                                 |
 | **Resume args**      | Replaces the last two groups to continue a conversation, e.g. `--resume {session_id}`.                                                                                                                                                                   |
 | **Fork args**        | Same, to fork one, e.g. `--resume {session_id} --fork-session --session-id {new_session_id}`.                                                                                                                                                            |
 | **Models / Efforts** | Suggestions for the composer's pickers. Models accept free text regardless. Leave efforts empty to hide that picker.                                                                                                                                     |
 | **Prompt transport** | **argv** passes the prompt as an argument — simple and reliable. **stdin** starts the agent first and pastes the prompt once it has been quiet for the given time — for agents with no prompt argument. Very long prompts switch to stdin automatically. |
-| **Session id**       | **assigned**: Switchyard chooses the id, so any session can be resumed. **latest in folder**: the agent chooses, and only its most recent conversation in a workspace can be continued.                                                                  |
+| **Session id**       | **assigned**: Yardsort chooses the id, so any session can be resumed. **latest in folder**: the agent chooses, and only its most recent conversation in a workspace can be continued.                                                                    |
 | **Enabled**          | Disabled harnesses stay configured but are not offered.                                                                                                                                                                                                  |
 
 ### How arguments work
@@ -57,7 +57,7 @@ in a scratch terminal so you can see it come up.
 
 ### Restoring defaults
 
-For a built-in harness only your _changes_ are saved, so improved defaults in a newer Switchyard
+For a built-in harness only your _changes_ are saved, so improved defaults in a newer Yardsort
 still reach every field you left alone. **Restore defaults** discards your changes.
 
 ### Adding your own harness
@@ -69,10 +69,10 @@ built-in ones. **Delete** removes one.
 
 ## Workspaces
 
-| Setting             | Meaning                                                                                                                                                                                    |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Worktree folder** | New workspaces are created in `<folder>/<project>/<workspace>`. Default: `~/switchyard`. Must be an absolute path; keep it short on Windows, where deep paths hit the 260-character limit. |
-| **Branch prefix**   | New branches are named `<prefix>/<workspace>`. Default `sy`. Empty means no prefix.                                                                                                        |
+| Setting             | Meaning                                                                                                                                                                                  |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Worktree folder** | New workspaces are created in `<folder>/<project>/<workspace>`. Default: `~/yardsort`. Must be an absolute path; keep it short on Windows, where deep paths hit the 260-character limit. |
+| **Branch prefix**   | New branches are named `<prefix>/<workspace>`. Default `ys`. Empty means no prefix.                                                                                                      |
 
 Both apply to workspaces created from now on; existing ones stay where they are.
 
@@ -87,7 +87,7 @@ Both apply to workspaces created from now on; existing ones stay where they are.
 
 For testing and unusual setups:
 
-| Variable                   | Effect                                                                          |
-| -------------------------- | ------------------------------------------------------------------------------- |
-| `SWITCHYARD_DATA_DIR`      | Keep the database **and** `settings.toml` in this folder — a throwaway profile. |
-| `SWITCHYARD_WORKTREE_ROOT` | Override the worktree folder.                                                   |
+| Variable                 | Effect                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| `YARDSORT_DATA_DIR`      | Keep the database **and** `settings.toml` in this folder — a throwaway profile. |
+| `YARDSORT_WORKTREE_ROOT` | Override the worktree folder.                                                   |

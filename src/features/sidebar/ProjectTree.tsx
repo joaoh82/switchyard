@@ -49,7 +49,7 @@ function ProjectNode(props: { project: Project; isFirst: boolean; isLast: boolea
     },
     { label: "Move up", disabled: props.isFirst, onSelect: () => void move(project.id, -1) },
     { label: "Move down", disabled: props.isLast, onSelect: () => void move(project.id, 1) },
-    { label: "Remove from Switchyard…", danger: true, onSelect: () => void removeProject(project) },
+    { label: "Remove from Yardsort…", danger: true, onSelect: () => void removeProject(project) },
   ];
 
   return (
