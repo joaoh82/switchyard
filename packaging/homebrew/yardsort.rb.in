@@ -16,7 +16,7 @@ cask "yardsort" do
 
   # The app updates itself (signed, on request), so `brew upgrade` leaves it alone by default.
   auto_updates true
-  depends_on macos: ">= :catalina"
+  depends_on macos: :catalina
 
   app "Yardsort.app"
 
