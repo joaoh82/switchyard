@@ -159,7 +159,8 @@ To do:
       public key and re-run the _Publish to the AUR_ job of the latest release.
 - [ ] Other package managers: Homebrew cask, winget; Flatpak.
 - [ ] Windows code signing, if funding appears.
-- [ ] First-run experience: detect missing git / no agents installed and say what to do.
+- [x] First-run check: the welcome screen reports whether git and at least one agent were found,
+      with install commands and a "Check again" that re-reads the environment without a restart.
 - [ ] Project website.
 
 _Exit:_ v0.1.0 public release.

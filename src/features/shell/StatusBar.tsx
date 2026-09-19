@@ -1,12 +1,14 @@
 import { formatShortcut } from "@/lib/platform";
 import { useAppStore } from "@/stores/app";
 import { useLayoutStore } from "@/stores/layout";
+import { usePreflightStore } from "@/stores/preflight";
 import { useTerminalStore } from "@/stores/terminals";
 
 export function StatusBar() {
   const info = useAppStore((s) => s.info);
   const env = useAppStore((s) => s.env);
   const renderer = useTerminalStore((s) => s.renderer);
+  const checking = usePreflightStore((s) => s.checking);
   const collapsed = useLayoutStore((s) => s.collapsed);
   const toggle = useLayoutStore((s) => s.toggle);
 
@@ -33,9 +35,17 @@ export function StatusBar() {
           </span>
         )}
         {env && !env.warning && (
-          <span title={`Programs launch with the environment of ${env.shell}`}>
-            env: {env.source === "loginShell" ? "login shell" : "process"} · {env.pathEntries} PATH
-          </span>
+          <button
+            type="button"
+            disabled={checking}
+            onClick={() => void usePreflightStore.getState().check(true)}
+            title={`Programs launch with the environment of ${env.shell}. Click to read it again — for example after installing an agent.`}
+            className="rounded px-1 hover:bg-raised hover:text-ink disabled:opacity-60"
+          >
+            {checking
+              ? "reading environment…"
+              : `env: ${env.source === "loginShell" ? "login shell" : "process"} · ${env.pathEntries} PATH`}
+          </button>
         )}
         {renderer && <span title="Terminal renderer">{renderer}</span>}
         <span>

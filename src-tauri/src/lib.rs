@@ -10,6 +10,7 @@ mod error;
 mod git;
 mod harness;
 mod legacy;
+mod preflight;
 mod projects;
 mod sessions;
 mod settings;
@@ -63,6 +64,7 @@ fn ipc_builder() -> Builder<tauri::Wry> {
             workspaces::commands::workspace_archive,
             workspaces::commands::workspace_restore,
             workspaces::commands::workspace_rename,
+            preflight::preflight,
             terminal::env_info,
             terminal::pty_spawn,
             terminal::pty_attach,

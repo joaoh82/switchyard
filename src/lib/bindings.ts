@@ -73,6 +73,8 @@ export const commands = {
 	/**  Bring back an archived workspace, or one whose folder disappeared, at its old path. */
 	workspaceRestore: (id: string) => typedError<Workspace, IpcError>(__TAURI_INVOKE("workspace_restore", { id })),
 	workspaceRename: (id: string, name: string) => typedError<Workspace, IpcError>(__TAURI_INVOKE("workspace_rename", { id, name })),
+	/**  With `reload`, the login shell is asked again first — for "I just installed it, look again". */
+	preflight: (reload: boolean) => typedError<Preflight, IpcError>(__TAURI_INVOKE("preflight", { reload })),
 	envInfo: (reload: boolean) => typedError<EnvInfo, IpcError>(__TAURI_INVOKE("env_info", { reload })),
 	ptySpawn: (request: SpawnRequest) => typedError<SessionInfo, IpcError>(__TAURI_INVOKE("pty_spawn", { request })),
 	/**  Stream a session into `output`: first a snapshot that repaints the terminal, then live bytes. */
@@ -206,6 +208,12 @@ export type FileEntry = {
 	ignored: boolean,
 };
 
+export type GitStatus = {
+	path: string | null,
+	/**  As `git --version` prints it, e.g. `git version 2.55.0`. */
+	version: string | null,
+};
+
 export type HarnessDef = {
 	/**  Stable key, recorded with sessions. */
 	id: string,
@@ -264,6 +272,17 @@ export type HarnessRequest = {
 	prompt: string | null,
 };
 
+export type HarnessStatus = {
+	id: string,
+	label: string,
+	command: string,
+	enabled: boolean,
+	/**  Where the command was found; `None` if it is not installed (or not on `PATH`). */
+	path: string | null,
+	/**  How to get it. Known for the built-in harnesses only. */
+	install: InstallHint | null,
+};
+
 export type HeadInfo = {
 	/**  Branch name, or the abbreviated commit when detached. */
 	label: string,
@@ -285,6 +304,13 @@ export type HostEvent =
  */
 { type: "quiet"; id: SessionId; busyMs: number };
 
+export type InstallHint = {
+	/**  One command that installs it on any OS with Node.js. */
+	command: string,
+	/**  The project's own install instructions, for every other way. */
+	url: string,
+};
+
 /**
  *  The one error shape that crosses IPC: a stable `code` for the UI to branch on and a
  *  human-readable `message` to show.
@@ -302,6 +328,16 @@ export type NewWorkspace = {
 	existingBranch: string | null,
 	harness: HarnessRequest,
 	size: TermSize,
+};
+
+export type Preflight = {
+	git: GitStatus,
+	harnesses: HarnessStatus[],
+	env: EnvInfo,
+	/**  `linux`, `macos` or `windows`: install advice differs. */
+	os: string,
+	/**  Nothing stands between the user and their first workspace. */
+	ready: boolean,
 };
 
 export type Project = {

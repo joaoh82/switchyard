@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Composer } from "@/features/composer/Composer";
+import { GettingStarted } from "@/features/onboarding/GettingStarted";
 import { BenchRunner } from "@/features/terminal/BenchRunner";
 import { bareHarness } from "@/features/terminal/quickLaunch";
 import { EndedBar } from "@/features/terminal/EndedBar";
@@ -37,7 +38,7 @@ export function WorkspacePanel() {
       ) : selection ? (
         <WorkspaceTerminals {...selection} rendererOverride={dev?.renderer} />
       ) : (
-        <Welcome />
+        <GettingStarted />
       )}
     </main>
   );
@@ -135,22 +136,6 @@ function WorkspaceTerminals(props: {
   );
 }
 
-function Welcome() {
-  const hasProjects = useProjectsStore((s) => s.projects.length > 0);
-  return (
-    <Centered>
-      <img src="/icon.svg" alt="" className="mx-auto mb-4 size-16 opacity-90" />
-      <h1 className="text-lg font-semibold">Yardsort</h1>
-      <p className="mt-1 text-ink-muted">Every agent on its own track.</p>
-      <p className="mt-5 text-ink-faint">
-        {hasProjects
-          ? "Pick a workspace on the left to start working."
-          : "Add a project on the left to get started."}
-      </p>
-    </Centered>
-  );
-}
-
 function LaunchButtons({ onLaunch }: { onLaunch: (harness?: HarnessRequest) => void }) {
   const harnesses = launchable(useHarnessStore((s) => s.harnesses));
   const button =
@@ -165,14 +150,6 @@ function LaunchButtons({ onLaunch }: { onLaunch: (harness?: HarnessRequest) => v
           {id}
         </button>
       ))}
-    </div>
-  );
-}
-
-function Centered({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex h-full items-center justify-center p-6">
-      <div className="text-center">{children}</div>
     </div>
   );
 }

@@ -98,6 +98,11 @@ impl Git {
         }
     }
 
+    /// What `git --version` prints, e.g. `git version 2.55.0`.
+    pub fn version(&self) -> GitResult<String> {
+        self.run(&std::env::current_dir().unwrap_or_default(), &["--version"])
+    }
+
     /// The top level of the repository containing `path`, or `None` if there isn't one.
     pub fn repo_root(&self, path: &Path) -> GitResult<Option<PathBuf>> {
         match self.run(path, &["rev-parse", "--show-toplevel"]) {

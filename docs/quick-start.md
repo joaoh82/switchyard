@@ -32,7 +32,14 @@ Download the latest build for your system from the
 
 Prefer to build it yourself? See [CONTRIBUTING.md](../CONTRIBUTING.md) — it is `just setup && just build`.
 
-## 3. Add a project
+## 3. First launch
+
+Yardsort looks for git and for the agents it knows, and the welcome screen tells you what it
+found. If something is missing it shows how to install it, with a command you can copy; install
+it, press **Check again** — no restart needed — and carry on. When everything is in place the
+screen points you at the next step: adding a project.
+
+## 4. Add a project
 
 Open Yardsort and press **+** next to _Projects_ (or `Ctrl+Shift+O` / `⌘O`).
 
@@ -42,7 +49,7 @@ Open Yardsort and press **+** next to _Projects_ (or `Ctrl+Shift+O` / `⌘O`).
 Your project appears on the left with one entry under it, **local**: your repository exactly as it
 is on disk. Click it and you get a shell there.
 
-## 4. Start a workspace
+## 5. Start a workspace
 
 Press the **+** on the project row (or `Ctrl+Shift+N` / `⌘N`) and say what you want done:
 
@@ -57,7 +64,7 @@ Pick the agent, optionally a model and effort level, and press **Enter**. Yardso
 The first time an agent sees a new folder it may ask whether you trust it; answer in the terminal
 as you normally would.
 
-## 5. Watch, review, repeat
+## 6. Watch, review, repeat
 
 ![Yardsort at work](images/overview.png)
 
@@ -70,7 +77,7 @@ as you normally would.
 When the work is done, it is an ordinary git branch: review it, push it, open a pull request —
 from the agent, from a shell tab (`Ctrl+Shift+T`), or from your usual tools.
 
-## 6. Come back later
+## 7. Come back later
 
 Quit whenever you like. When you return, pick the workspace and press **Resume** — the agent
 reopens with the whole conversation intact.

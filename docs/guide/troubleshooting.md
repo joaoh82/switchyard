@@ -6,8 +6,9 @@ Yardsort launches programs with the environment of your **login shell**, which i
 startup. The status bar shows the result: `env: login shell · 34 PATH`.
 
 1. Check the command works in a **new** terminal window: `which claude`.
-2. If you installed it while Yardsort was running, restart Yardsort so it re-reads your
-   environment.
+2. If you installed it while Yardsort was running, click the **`env: …`** indicator in the status
+   bar (or **Check again** on the welcome screen): Yardsort re-reads your environment without a
+   restart.
 3. If your `PATH` is set somewhere only some shells read, move it to your shell's profile
    (`~/.zprofile`, `~/.bash_profile`, `~/.config/fish/config.fish`).
 4. Or put the full path in the harness's **Command** field —
@@ -16,6 +17,13 @@ startup. The status bar shows the result: `env: login shell · 34 PATH`.
 If the status bar says `shell environment unavailable`, hover it for the reason — usually a shell
 startup file that waits for input or takes more than a few seconds. Yardsort then falls back to
 the environment it was started with.
+
+## The welcome screen says git or an agent is missing
+
+That screen is a live check of what Yardsort can find with your login shell's `PATH`. Install
+what it asks for using the command shown (or the linked instructions), then press **Check
+again**. If the tool _is_ installed and works in a terminal, the problem is `PATH` — see the
+section above. Agents you have switched off in Settings → Harnesses do not count.
 
 ## Windows
 

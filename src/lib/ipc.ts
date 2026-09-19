@@ -24,6 +24,7 @@ import {
   type HostEvent,
   type IpcError,
   type NewWorkspace,
+  type Preflight,
   type Project,
   type Scope,
   type SessionId,
@@ -55,6 +56,7 @@ export type {
   HostEvent,
   IpcError,
   NewWorkspace,
+  Preflight,
   Project,
   Scope,
   SessionId,
@@ -109,6 +111,8 @@ export const ipc = {
   appInfo: (): Promise<AppInfo> => commands.appInfo(),
   benchReport: async (report: string): Promise<void> => void (await commands.benchReport(report)),
   envInfo: (reload = false) => unwrap(commands.envInfo(reload)),
+  /** Is git here? Which agents? With `reload`, the login shell is asked again first. */
+  preflight: (reload = false) => unwrap(commands.preflight(reload)),
 
   projectsList: () => unwrap(commands.projectsList()),
   /** Rejects with code `not_a_git_repo` unless `initGit` is set. */

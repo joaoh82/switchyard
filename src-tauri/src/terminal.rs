@@ -84,7 +84,7 @@ pub const HARNESS_SESSION_LABEL: &str = "harnessSession";
 pub const RECORD_LABEL: &str = "record";
 
 /// What the launch environment looks like, for the status bar and for bug reports.
-#[derive(Debug, Clone, Serialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct EnvInfo {
     pub source: EnvSource,
