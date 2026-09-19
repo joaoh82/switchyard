@@ -15,6 +15,7 @@ the documentation says so, in the same commit or pull request.**
   changed behaviour, renamed button, new shortcut, new setting, new error a user can hit → update
   the matching guide. A new area of the app gets a new guide, linked from `docs/README.md`.
 - `README.md` — the highlights, install table and quick start must stay true.
+- `CHANGELOG.md` — add a line for anything a user would notice, under the next version.
 - `docs/design/` — architecture, the harness model, the roadmap (tick milestones, record what was
   found) and open questions (strike the ones that get settled).
 - Screenshots live in `docs/images/`. Retake them when the UI they show changes noticeably. They

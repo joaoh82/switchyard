@@ -127,7 +127,8 @@ out and how to send a change.
 Early, and moving fast. The core loop — projects, parallel workspaces, configurable agents, live
 review, resumable sessions — works on all three platforms and is covered by CI on each. Expect
 rough edges, and please [report them](https://github.com/joaoh82/yardsort/issues/new/choose).
-The [roadmap](docs/design/05-roadmap.md) says what is next.
+The [changelog](CHANGELOG.md) says what changed, and the [roadmap](docs/design/05-roadmap.md)
+what is next.
 
 ## Contributing
 

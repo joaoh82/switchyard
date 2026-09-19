@@ -211,6 +211,15 @@ jobs:
           KEYS
           export GIT_SSH_COMMAND="ssh -i /home/builder/.ssh/aur -o IdentitiesOnly=yes -o UserKnownHostsFile=/home/builder/.ssh/known_hosts"
 
+          # A key that no AUR account knows yet is a setup step still to do, not a broken release.
+          if ! run env GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git ls-remote ssh://aur@aur.archlinux.org/yardsort-bin.git >/dev/null 2>/tmp/aur-auth; then
+            if grep -q "Permission denied" /tmp/aur-auth; then
+              echo "::warning::The AUR does not accept the deploy key yet — register its public half on the AUR account (docs/releasing.md). The AUR package was not updated."
+              exit 0
+            fi
+            cat /tmp/aur-auth; exit 1
+          fi
+
           run env GIT_SSH_COMMAND="$GIT_SSH_COMMAND" git clone ssh://aur@aur.archlinux.org/yardsort-bin.git /work/aur
           run scripts/aur-render.sh "$version" /work/aur
 
