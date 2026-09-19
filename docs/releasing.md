@@ -101,6 +101,58 @@ cd /tmp/yardsort-bin && makepkg -f && git add PKGBUILD .SRCINFO && git commit -m
 The name is `yardsort-bin` because it ships a prebuilt binary; a build-from-source `yardsort`
 package is welcome from anyone who wants to maintain one.
 
+## Homebrew
+
+macOS users can `brew install --cask joaoh82/yardsort/yardsort`. The cask lives in its own tap
+repository, [joaoh82/homebrew-yardsort](https://github.com/joaoh82/homebrew-yardsort), and is
+generated from `packaging/homebrew/yardsort.rb.in`.
+
+The **Homebrew** job runs on macOS and proves the cask before publishing it: `brew style`,
+`brew audit --strict --online`, a real `brew install`, then `codesign --verify`, Gatekeeper's
+verdict (`spctl`, which must say _Notarized Developer ID_) and the installed version. Only then
+does it push to the tap.
+
+It needs `HOMEBREW_TAP_DEPLOY_KEY`: the private half of an SSH **deploy key** registered, with
+write access, on the tap repository only — it can touch nothing else.
+
+```sh
+ssh-keygen -t ed25519 -N "" -C "yardsort release workflow (homebrew tap)" -f tap_key
+gh repo deploy-key add tap_key.pub -R joaoh82/homebrew-yardsort --allow-write --title "yardsort release workflow"
+gh secret set HOMEBREW_TAP_DEPLOY_KEY -R joaoh82/yardsort < tap_key
+```
+
+The cask declares `auto_updates true`, because the app updates itself; `brew upgrade` therefore
+leaves it alone unless given `--greedy`.
+
+## winget
+
+Windows users can `winget install joaoh82.Yardsort` once Microsoft has accepted the package. Each
+version is a pull request against [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs)
+adding three manifests under `manifests/j/joaoh82/Yardsort/<version>/`, generated from
+`packaging/winget/*.in`. Microsoft's pipeline validates it (it installs the package in a sandbox)
+and a moderator merges it — hours to days, longer for a first submission.
+
+The **winget** job opens that pull request through the API (`scripts/winget-submit.sh`). It does
+nothing while an earlier Yardsort pull request is still open. It needs `WINGET_TOKEN`: a
+**classic** personal access token with the `public_repo` scope, from the account that owns the
+`winget-pkgs` fork ([create one](https://github.com/settings/tokens/new?scopes=public_repo&description=yardsort%20winget)):
+
+```sh
+gh secret set WINGET_TOKEN -R joaoh82/yardsort      # paste the token
+```
+
+The first contribution from an account also needs Microsoft's CLA: the bot asks in the pull
+request, and the answer is a comment saying `@microsoft-github-policy-service agree`.
+
+## Publishing to package managers by hand
+
+All three jobs live in `.github/workflows/packages.yml`, which the Release workflow calls once a
+release is public. It can also be run alone — _Actions → Package managers → Run workflow_, or
+`gh workflow run packages.yml -f tag=v0.3.1` — to publish or re-publish an existing release
+without rebuilding anything: after adding a missing credential, say, or once winget has merged an
+earlier version. (Re-running the _Release_ workflow itself is different: it rebuilds and re-uploads
+the installers, which changes their checksums. Avoid it for a release that is already public.)
+
 ## Windows signing
 
 Deliberately not set up: certificates cost money and the project has none. If that changes,
@@ -136,4 +188,4 @@ To rehearse the whole flow against your own server, start a release build with
 
 ## Not there yet
 
-- **More package managers** — Homebrew cask, winget, Flatpak.
+- **More package managers** — Flatpak, Scoop, Chocolatey.

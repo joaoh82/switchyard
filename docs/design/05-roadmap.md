@@ -160,7 +160,11 @@ To do:
       2026-09-19, and a maintainer account is needed to register the deploy key. Everything else
       is in place (the `AUR_SSH_PRIVATE_KEY` secret is set); once an account exists, register the
       public key and re-run the _Publish to the AUR_ job of the latest release.
-- [ ] Other package managers: Homebrew cask, winget; Flatpak.
+- [x] Homebrew: cask in the `joaoh82/homebrew-yardsort` tap, install-tested on macOS (Gatekeeper:
+      _Notarized Developer ID_) by the release workflow before each push.
+- [ ] winget: `joaoh82.Yardsort` submitted (microsoft/winget-pkgs#437567); awaiting Microsoft's
+      review. Updates are submitted by the release workflow once `WINGET_TOKEN` is set.
+- [ ] Flatpak, Scoop, Chocolatey — on request.
 - [ ] Windows code signing, if funding appears.
 - [x] First-run check: the welcome screen reports whether git and at least one agent were found,
       with install commands and a "Check again" that re-reads the environment without a restart.

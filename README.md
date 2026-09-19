@@ -72,11 +72,11 @@ It is modeled on tools like Conductor and Superset, with the requirement they do
 
 Download the latest build from the [**Releases page**](https://github.com/joaoh82/yardsort/releases/latest):
 
-| System      | File                                                                                      |
-| ----------- | ----------------------------------------------------------------------------------------- |
-| **Linux**   | `.AppImage` (portable), `.deb`, or `.rpm` (an AUR package, `yardsort-bin`, is on its way) |
-| **macOS**   | `.dmg` — universal (Apple Silicon and Intel), signed and notarized                        |
-| **Windows** | `-setup.exe` or `.msi` — not code-signed yet: choose _More info → Run anyway_             |
+| System      | File                                                                                                                                               |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Linux**   | `.AppImage` (portable), `.deb`, or `.rpm` (an AUR package, `yardsort-bin`, is on its way)                                                          |
+| **macOS**   | `.dmg` — universal (Apple Silicon and Intel), signed and notarized — or `brew install --cask joaoh82/yardsort/yardsort`                            |
+| **Windows** | `-setup.exe` or `.msi` — not code-signed yet: choose _More info → Run anyway_. (`winget install joaoh82.Yardsort` is awaiting Microsoft's review.) |
 
 You also need **git** and at least one agent CLI that already works in your terminal (for
 example [Claude Code](https://claude.com/claude-code)). Yardsort does not bundle agents and

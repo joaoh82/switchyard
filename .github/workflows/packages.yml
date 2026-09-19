@@ -142,3 +142,21 @@ jobs:
           test "$(defaults read /Applications/Yardsort.app/Contents/Info CFBundleShortVersionString)" = "$version"
 
           git push origin HEAD:main
+
+  # winget: a pull request against microsoft/winget-pkgs, which Microsoft validates and merges.
+  winget:
+    name: winget
+    if: ${{ !contains(inputs.tag, '-') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Submit the new version
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::No WINGET_TOKEN secret: nothing was submitted to winget. See docs/releasing.md."
+            exit 0
+          fi
+          scripts/winget-submit.sh "${TAG#v}"

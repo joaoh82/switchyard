@@ -3,6 +3,11 @@
 Notable changes in each release. The [releases page](https://github.com/joaoh82/yardsort/releases)
 has the downloads and the full commit lists.
 
+## Unreleased
+
+- Install with Homebrew on macOS: `brew install --cask joaoh82/yardsort/yardsort`.
+- Submitted to winget (`joaoh82.Yardsort`), pending Microsoft's review.
+
 ## 0.3.1
 
 - A changelog (this file).
