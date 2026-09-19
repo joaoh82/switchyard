@@ -3,6 +3,8 @@ import { Group, Panel, Separator, useDefaultLayout, usePanelRef } from "react-re
 import { ChangesPanel } from "@/features/changes/ChangesPanel";
 import { composeInCurrentProject, openProjectFromDisk } from "@/features/sidebar/actions";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
+import { UpdateDialog } from "@/features/updates/UpdateDialog";
+import { useUpdateChecks } from "@/features/updates/useUpdateChecks";
 import { Sidebar } from "@/features/sidebar/Sidebar";
 import { WorkspacePanel } from "@/features/workspace/WorkspacePanel";
 import { hasCore } from "@/lib/ipc";
@@ -12,6 +14,7 @@ import { useHarnessStore } from "@/stores/harnesses";
 import { useLayoutStore, type SidePanel } from "@/stores/layout";
 import { useProjectsStore } from "@/stores/projects";
 import { useTerminalStore } from "@/stores/terminals";
+import { useUpdatesStore } from "@/stores/updates";
 import { StatusBar } from "./StatusBar";
 
 const separatorClass =
@@ -25,6 +28,8 @@ export function AppShell() {
   const toggle = useLayoutStore((s) => s.toggle);
   const setCollapsed = useLayoutStore((s) => s.setCollapsed);
   const settingsOpen = useLayoutStore((s) => s.settingsOpen);
+  const updateOpen = useUpdatesStore((s) => s.open);
+  useUpdateChecks();
   const setSettingsOpen = useLayoutStore((s) => s.setSettingsOpen);
 
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
@@ -122,6 +127,7 @@ export function AppShell() {
       </Group>
       <StatusBar />
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      {updateOpen && <UpdateDialog />}
     </div>
   );
 }

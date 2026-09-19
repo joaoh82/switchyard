@@ -18,12 +18,16 @@ Knowing the design helps judge what is a vulnerability:
 - Yardsort **launches programs you configured** — coding agents and your shell — in folders you
   chose, with your login shell's environment. An agent can do whatever its own permission model
   allows; that is the agent's security boundary, not Yardsort's.
-- It stores **no credentials** and has **no network features of its own**: no account, no
-  telemetry, no update check yet. Agents use their own logins.
+- It stores **no credentials**, has no account and sends **no telemetry**. Agents use their own
+  logins. Its only network request is the **update check**: a download of `latest.json` from this
+  repository's GitHub releases, shortly after start and once a day (it can be switched off).
+- **Updates are signed.** An update is installed only if its signature verifies against the public
+  key built into the app, and only after the user asks for it.
 - Programs are started with an argument list, **never through a shell**, so prompts and settings
   cannot inject commands.
 - When browsing or diffing a workspace, the webview names the workspace by id and gives a
   relative path; the core resolves it and refuses anything that leaves the workspace folder.
 
 Reports about breaking those guarantees — path traversal out of a workspace, command injection
-through a prompt or a harness field, a webview escape — are exactly what we want to hear about.
+through a prompt or a harness field, a webview escape, anything that would let an unsigned or
+downgraded update install — are exactly what we want to hear about.

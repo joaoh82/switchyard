@@ -63,6 +63,7 @@ const codex: HarnessInfo = {
 const settings: SettingsInfo = {
   editorCommand: null,
   notifyWhenQuiet: true,
+  checkForUpdates: true,
   workspaces: { worktreeRoot: null, branchPrefix: "ys" },
   defaultWorktreeRoot: "/home/me/yardsort",
   worktreeRootOverride: null,
@@ -324,11 +325,7 @@ describe("Settings", () => {
   });
 
   it("saves the editor command, and clearing it goes back to auto-detect", async () => {
-    core.settingsSaveGeneral.mockImplementation(async (editorCommand, notifyWhenQuiet) => ({
-      ...settings,
-      editorCommand,
-      notifyWhenQuiet,
-    }));
+    core.settingsSaveGeneral.mockImplementation(async (general) => ({ ...settings, ...general }));
     const { user } = await openSettings();
     await user.click(screen.getByRole("tab", { name: "General" }));
     const editor = await screen.findByLabelText("Editor command");
@@ -336,19 +333,21 @@ describe("Settings", () => {
 
     await user.type(editor, " zed ");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(core.settingsSaveGeneral).toHaveBeenLastCalledWith("zed", true);
+    expect(core.settingsSaveGeneral).toHaveBeenLastCalledWith({
+      editorCommand: "zed",
+      notifyWhenQuiet: true,
+      checkForUpdates: true,
+    });
 
     await user.clear(editor);
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(core.settingsSaveGeneral).toHaveBeenLastCalledWith(null, true);
+    expect(core.settingsSaveGeneral).toHaveBeenLastCalledWith(
+      expect.objectContaining({ editorCommand: null }),
+    );
   });
 
   it("turns finish notifications off, and tells the rest of the app", async () => {
-    core.settingsSaveGeneral.mockImplementation(async (editorCommand, notifyWhenQuiet) => ({
-      ...settings,
-      editorCommand,
-      notifyWhenQuiet,
-    }));
+    core.settingsSaveGeneral.mockImplementation(async (general) => ({ ...settings, ...general }));
     const { user } = await openSettings();
     await user.click(screen.getByRole("tab", { name: "General" }));
     const save = await screen.findByRole("button", { name: "Save" });
@@ -356,7 +355,9 @@ describe("Settings", () => {
 
     await user.click(screen.getByRole("checkbox", { name: /Notify me when an agent finishes/ }));
     await user.click(save);
-    expect(core.settingsSaveGeneral).toHaveBeenLastCalledWith(null, false);
+    expect(core.settingsSaveGeneral).toHaveBeenLastCalledWith(
+      expect.objectContaining({ notifyWhenQuiet: false, checkForUpdates: true }),
+    );
     expect(useAppStore.getState().notifyWhenQuiet).toBe(false);
   });
 

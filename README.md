@@ -51,7 +51,10 @@ It is modeled on tools like Conductor and Superset, with the requirement they do
 - **Careful with your work.** Deleting or archiving a workspace always keeps the branch, and
   never discards uncommitted changes without a second, explicit confirmation.
 - **Private by construction.** No account, no telemetry, no keys. Agents use their own logins;
-  Yardsort just starts them.
+  Yardsort just starts them. Its one network request is a check for new versions, which you can
+  switch off.
+- **Keeps itself current.** Signed in-app updates on macOS, Windows and the Linux AppImage — one
+  click, and your agents' conversations resume afterwards.
 - **Light.** Built with [Tauri](https://tauri.app) and Rust: a few megabytes, not a bundled browser.
 
 <table>
@@ -97,6 +100,7 @@ The [quick start guide](docs/quick-start.md) walks through it with pictures, and
 | [Projects](docs/guide/projects.md) · [Workspaces](docs/guide/workspaces.md)                      | Repositories, branches, worktrees, archiving         |
 | [Terminals & sessions](docs/guide/terminals-and-sessions.md)                                     | Tabs, status dots, notifications, resume and fork    |
 | [Changes & files](docs/guide/changes-and-files.md)                                               | Reviewing what an agent did                          |
+| [Updates](docs/guide/updates.md)                                                                 | How new versions reach you                           |
 | [Settings & harnesses](docs/guide/settings.md)                                                   | Configure agents, add your own                       |
 | [Keyboard shortcuts](docs/guide/shortcuts.md) · [Troubleshooting](docs/guide/troubleshooting.md) |                                                      |
 | [Design docs](docs/design/README.md)                                                             | Architecture, harness model, roadmap, open questions |

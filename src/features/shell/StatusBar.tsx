@@ -3,12 +3,14 @@ import { useAppStore } from "@/stores/app";
 import { useLayoutStore } from "@/stores/layout";
 import { usePreflightStore } from "@/stores/preflight";
 import { useTerminalStore } from "@/stores/terminals";
+import { useUpdatesStore } from "@/stores/updates";
 
 export function StatusBar() {
   const info = useAppStore((s) => s.info);
   const env = useAppStore((s) => s.env);
   const renderer = useTerminalStore((s) => s.renderer);
   const checking = usePreflightStore((s) => s.checking);
+  const update = useUpdatesStore((s) => s.status?.available);
   const collapsed = useLayoutStore((s) => s.collapsed);
   const toggle = useLayoutStore((s) => s.toggle);
 
@@ -29,6 +31,16 @@ export function StatusBar() {
         />
       </div>
       <div className="flex items-center gap-3 font-mono">
+        {update && (
+          <button
+            type="button"
+            onClick={() => useUpdatesStore.getState().show(true)}
+            title="A newer version of Yardsort is available"
+            className="rounded bg-accent px-1.5 font-sans font-medium text-canvas hover:opacity-90"
+          >
+            Update to {update.version}
+          </button>
+        )}
         {env?.warning && (
           <span className="text-red-400" title={env.warning}>
             shell environment unavailable

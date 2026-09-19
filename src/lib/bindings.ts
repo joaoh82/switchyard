@@ -36,7 +36,7 @@ export const commands = {
 	harnessTest: (def: HarnessDef, size: TermSize) => typedError<SessionInfo, IpcError>(__TAURI_INVOKE("harness_test", { def, size })),
 	settingsGet: () => typedError<SettingsInfo, IpcError>(__TAURI_INVOKE("settings_get")),
 	settingsSaveWorkspaces: (workspaces: WorkspaceSettingsDto) => typedError<SettingsInfo, IpcError>(__TAURI_INVOKE("settings_save_workspaces", { workspaces })),
-	settingsSaveGeneral: (editorCommand: string | null, notifyWhenQuiet: boolean) => typedError<SettingsInfo, IpcError>(__TAURI_INVOKE("settings_save_general", { editorCommand, notifyWhenQuiet })),
+	settingsSaveGeneral: (editorCommand: string | null, notifyWhenQuiet: boolean, checkForUpdates: boolean) => typedError<SettingsInfo, IpcError>(__TAURI_INVOKE("settings_save_general", { editorCommand, notifyWhenQuiet, checkForUpdates })),
 	projectBranches: (projectId: string) => typedError<BranchList, IpcError>(__TAURI_INVOKE("project_branches", { projectId })),
 	/**
 	 *  The core loop: make a worktree — on a new branch, or for an existing one — and start a harness in it with the user's
@@ -75,6 +75,13 @@ export const commands = {
 	workspaceRename: (id: string, name: string) => typedError<Workspace, IpcError>(__TAURI_INVOKE("workspace_rename", { id, name })),
 	/**  With `reload`, the login shell is asked again first — for "I just installed it, look again". */
 	preflight: (reload: boolean) => typedError<Preflight, IpcError>(__TAURI_INVOKE("preflight", { reload })),
+	/**  Ask whether a newer release exists. Touches nothing on disk. */
+	updateCheck: () => typedError<UpdateStatus, IpcError>(__TAURI_INVOKE("update_check")),
+	/**
+	 *  Download the update found by the last check, verify its signature, install it and restart.
+	 *  Only for [`InstallKind::SelfUpdating`] copies.
+	 */
+	updateInstall: (progress: Channel<DownloadProgress>) => typedError<null, IpcError>(__TAURI_INVOKE("update_install", { progress })),
 	envInfo: (reload: boolean) => typedError<EnvInfo, IpcError>(__TAURI_INVOKE("env_info", { reload })),
 	ptySpawn: (request: SpawnRequest) => typedError<SessionInfo, IpcError>(__TAURI_INVOKE("pty_spawn", { request })),
 	/**  Stream a session into `output`: first a snapshot that repaints the terminal, then live bytes. */
@@ -112,6 +119,14 @@ export type AppInfo = {
 	arch: string,
 	debug: boolean,
 	dev: DevFlags,
+};
+
+export type AvailableUpdate = {
+	version: string,
+	/**  The release notes, as written on the release. */
+	notes: string | null,
+	/**  Where to read about it and download it by hand. */
+	url: string,
 };
 
 export type BranchList = {
@@ -160,6 +175,12 @@ export type DevFlags = {
 	bench: string | null,
 	/**  `YARDSORT_RENDERER`: force the terminal renderer (`webgl` or `dom`). */
 	renderer: string | null,
+};
+
+export type DownloadProgress = {
+	downloaded: number,
+	/**  `None` when the server did not say how big the download is. */
+	total: number | null,
 };
 
 /**  What the launch environment looks like, for the status bar and for bug reports. */
@@ -311,6 +332,15 @@ export type InstallHint = {
 	url: string,
 };
 
+/**  How this copy of the app gets new versions. */
+export type InstallKind = 
+/**  It can download and install an update itself. */
+"selfUpdating" | 
+/**  A package manager owns the files; the user updates through it. */
+"packageManager" | 
+/**  A development build. Never updates. */
+"development";
+
 /**
  *  The one error shape that crosses IPC: a stable `code` for the UI to branch on and a
  *  human-readable `message` to show.
@@ -441,6 +471,7 @@ export type SettingsInfo = {
 	/**  The "Open in editor" command; `None` tries the common editors in turn. */
 	editorCommand: string | null,
 	notifyWhenQuiet: boolean,
+	checkForUpdates: boolean,
 	workspaces: WorkspaceSettingsDto,
 	defaultWorktreeRoot: string,
 	/**  Set while `YARDSORT_WORKTREE_ROOT` overrides the setting. */
@@ -469,6 +500,13 @@ export type SpawnRequest = {
 export type TermSize = {
 	cols: number,
 	rows: number,
+};
+
+export type UpdateStatus = {
+	currentVersion: string,
+	installKind: InstallKind,
+	/**  The newer release, if there is one. */
+	available: AvailableUpdate | null,
 };
 
 export type Workspace = {

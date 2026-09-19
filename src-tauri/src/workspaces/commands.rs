@@ -55,6 +55,7 @@ pub struct SettingsInfo {
     /// The "Open in editor" command; `None` tries the common editors in turn.
     pub editor_command: Option<String>,
     pub notify_when_quiet: bool,
+    pub check_for_updates: bool,
     pub workspaces: WorkspaceSettingsDto,
     pub default_worktree_root: String,
     /// Set while `YARDSORT_WORKTREE_ROOT` overrides the setting.
@@ -238,6 +239,7 @@ fn settings_info(state: &AppState) -> IpcResult<SettingsInfo> {
     let workspaces = settings.workspaces;
     Ok(SettingsInfo {
         notify_when_quiet: settings.general.notify_when_quiet,
+        check_for_updates: settings.general.check_for_updates,
         editor_command: settings.general.editor_command,
         workspaces: WorkspaceSettingsDto {
             worktree_root: workspaces.worktree_root,
@@ -452,6 +454,7 @@ pub async fn settings_save_general(
     app: AppHandle,
     editor_command: Option<String>,
     notify_when_quiet: bool,
+    check_for_updates: bool,
 ) -> IpcResult<SettingsInfo> {
     blocking(app, move |state| {
         let editor = editor_command
@@ -462,6 +465,7 @@ pub async fn settings_save_general(
             .update(|settings| {
                 settings.general.editor_command = editor;
                 settings.general.notify_when_quiet = notify_when_quiet;
+                settings.general.check_for_updates = check_for_updates;
             })
             .map_err(save_failed)?;
         settings_info(state)

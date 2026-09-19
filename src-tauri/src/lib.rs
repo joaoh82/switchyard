@@ -17,6 +17,7 @@ mod settings;
 mod state;
 mod store;
 mod terminal;
+mod updates;
 mod workspaces;
 
 pub use env::print_env_and_exit_if_asked;
@@ -65,6 +66,8 @@ fn ipc_builder() -> Builder<tauri::Wry> {
             workspaces::commands::workspace_restore,
             workspaces::commands::workspace_rename,
             preflight::preflight,
+            updates::update_check,
+            updates::update_install,
             terminal::env_info,
             terminal::pty_spawn,
             terminal::pty_attach,
@@ -105,6 +108,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updates::PendingUpdate::default())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);

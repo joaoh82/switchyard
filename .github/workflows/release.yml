@@ -126,20 +126,41 @@ jobs:
             } >> "$GITHUB_ENV"
           done
 
-      - name: Build and upload installers
+      # `tauri.release.conf.json` switches on updater artifacts: each self-updating bundle is signed
+      # with the update key, and a `latest.json` describing them is attached to the release — that
+      # is what installed copies read to find out about this version. See docs/releasing.md.
+      - name: Build, sign and upload installers
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.draft.outputs.release_id }}
           tauriScript: bun tauri
-          args: ${{ matrix.args }}
+          args: --config src-tauri/tauri.release.conf.json ${{ matrix.args }}
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
 
   publish:
     name: Publish release
     needs: [draft, build]
     runs-on: ubuntu-24.04
     steps:
+      # An installed copy that finds no `latest.json` cannot update, silently. Refuse to publish
+      # a release that would strand them.
+      - name: The release must carry the update manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release download "$TAG" --pattern latest.json --output latest.json
+          for platform in linux-x86_64 darwin-aarch64 darwin-x86_64 windows-x86_64; do
+            jq -e --arg p "$platform" '.platforms | to_entries | any(.key | startswith($p)) ' latest.json >/dev/null \
+              || { echo "::error::latest.json has no entry for $platform"; jq '.platforms | keys' latest.json; exit 1; }
+          done
+          jq '{version, platforms: (.platforms | keys)}' latest.json
+
       - name: Every platform built — make the release public
         env:
           GH_TOKEN: ${{ github.token }}

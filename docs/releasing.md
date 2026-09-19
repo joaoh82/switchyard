@@ -107,8 +107,33 @@ Deliberately not set up: certificates cost money and the project has none. If th
 Tauri's [Windows signing guide](https://tauri.app/distribute/sign/windows/) applies and the
 workflow needs the certificate passed to the build step.
 
+## Updates: signing and `latest.json`
+
+Installed copies of Yardsort find new versions by reading
+`https://github.com/joaoh82/yardsort/releases/latest/download/latest.json`, and install one only
+if its signature verifies against the public key in `src-tauri/tauri.conf.json`
+(`plugins.updater.pubkey`).
+
+The release workflow builds with `src-tauri/tauri.release.conf.json`, which turns on
+`createUpdaterArtifacts`: the self-updating bundles (AppImage, the macOS `.app.tar.gz`, the NSIS
+and MSI installers) each get a `.sig`, and `latest.json` lists them. The publish job **refuses to
+make a release public if `latest.json` is missing a platform** — such a release would silently
+strand everyone on older versions.
+
+It needs two secrets: `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+
+> **This key is the project's most important secret.** If it is **lost**, no installed copy can
+> ever auto-update again — users must reinstall by hand. If it **leaks**, anyone who can also
+> publish a release here can ship code to every user. Keep an offline backup. To rotate it, ship a
+> release signed with the _old_ key whose app carries the _new_ public key, then switch the secrets.
+
+Local builds (`just build`) do not create updater artifacts and need no key. Which copies update
+themselves is decided by how they were packaged (`src-tauri/src/updates.rs`): `.deb`, `.rpm` and
+the AUR package are owned by a package manager and are only told that a new version exists.
+
+To rehearse the whole flow against your own server, start a release build with
+`YARDSORT_UPDATE_ENDPOINT=https://…/latest.json`.
+
 ## Not there yet
 
-- **Auto-update.** Needs a signing key for update manifests, kept safe forever (losing it strands
-  every installed copy). Tracked on the [roadmap](design/05-roadmap.md).
 - **More package managers** — Homebrew cask, winget, Flatpak.

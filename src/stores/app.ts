@@ -6,6 +6,7 @@ interface AppState {
   env: EnvInfo | null;
   /** Mirrors the general setting, so event handlers need not ask the core each time. */
   notifyWhenQuiet: boolean;
+  checkForUpdates: boolean;
   load: () => Promise<void>;
 }
 
@@ -14,10 +15,13 @@ export const useAppStore = create<AppState>((set) => ({
   info: null,
   env: null,
   notifyWhenQuiet: true,
+  // Off until the settings say otherwise, so nothing phones home before they are read.
+  checkForUpdates: false,
   async load() {
     if (!hasCore()) return;
     set({ info: await ipc.appInfo() });
-    set({ notifyWhenQuiet: (await ipc.settingsGet()).notifyWhenQuiet });
+    const settings = await ipc.settingsGet();
+    set({ notifyWhenQuiet: settings.notifyWhenQuiet, checkForUpdates: settings.checkForUpdates });
     // Slower: the first call waits for the login shell to report its environment.
     set({ env: await ipc.envInfo() });
   },

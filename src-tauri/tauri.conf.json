@@ -40,5 +40,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk3Q0Q3QTlCMjNFRDE3RjMKUldUekYrMGptM3JObDVWV0w5eDBLT0FZanhSNEszQWpUZThWbUExNXRUemswMlhITTRXdC9YcEkK",
+      "endpoints": ["https://github.com/joaoh82/yardsort/releases/latest/download/latest.json"]
+    }
   }
 }

@@ -8,10 +8,12 @@ import {
   events,
   type AddedProject,
   type AppInfo,
+  type AvailableUpdate,
   type BranchList,
   type ChangeSet,
   type Content,
   type CreatedWorkspace,
+  type DownloadProgress,
   type EnvInfo,
   type ExitInfo,
   type FileChange,
@@ -33,6 +35,7 @@ import {
   type SettingsInfo,
   type SpawnRequest,
   type TermSize,
+  type UpdateStatus,
   type Workspace,
   type WorkspaceSettingsDto,
 } from "./bindings";
@@ -40,10 +43,12 @@ import {
 export type {
   AddedProject,
   AppInfo,
+  AvailableUpdate,
   BranchList,
   ChangeSet,
   Content,
   CreatedWorkspace,
+  DownloadProgress,
   EnvInfo,
   ExitInfo,
   FileChange,
@@ -65,6 +70,7 @@ export type {
   SettingsInfo,
   SpawnRequest,
   TermSize,
+  UpdateStatus,
   Workspace,
   WorkspaceSettingsDto,
 };
@@ -140,8 +146,27 @@ export const ipc = {
   /** Rejects with code `worktree_dirty` unless `force` is set. The branch is always kept. */
   workspaceDelete: (id: string, force = false) => done(commands.workspaceDelete(id, force)),
 
-  settingsSaveGeneral: (editorCommand: string | null, notifyWhenQuiet: boolean) =>
-    unwrap(commands.settingsSaveGeneral(editorCommand, notifyWhenQuiet)),
+  settingsSaveGeneral: (general: {
+    editorCommand: string | null;
+    notifyWhenQuiet: boolean;
+    checkForUpdates: boolean;
+  }) =>
+    unwrap(
+      commands.settingsSaveGeneral(
+        general.editorCommand,
+        general.notifyWhenQuiet,
+        general.checkForUpdates,
+      ),
+    ),
+
+  /** Is there a newer release? Looks only; nothing is downloaded. */
+  updateCheck: () => unwrap(commands.updateCheck()),
+  /** Download, verify and install the update found by the last check, then restart. */
+  updateInstall(onProgress: (progress: DownloadProgress) => void): Promise<void> {
+    const channel = new Channel<DownloadProgress>();
+    channel.onmessage = onProgress;
+    return done(commands.updateInstall(channel));
+  },
 
   /** A workspace's harness conversations, newest first. */
   sessionsList: (workspaceId: string) => unwrap(commands.sessionsList(workspaceId)),

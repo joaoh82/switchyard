@@ -148,8 +148,11 @@ To do:
 - [x] **v0.1.0 released** (2026-09-19, under the project's first name, _Switchyard_): first public release, built by the release workflow on its
       first run. The macOS build is signed with a Developer ID certificate and notarized by Apple.
 - [ ] Hands-on pass and benchmark rows on macOS and Windows hardware.
-- [ ] Auto-update (Tauri updater): needs an update-signing key whose private half must be kept
-      safe forever — losing it strands every installed copy — so it is a deliberate step.
+- [x] Auto-update: signed updates via the Tauri updater. The app checks `latest.json` on the GitHub
+      release after start and daily, shows an "Update to x.y.z" button, and installs on request,
+      warning about running terminals. AppImage, macOS and Windows copies update themselves;
+      package-manager installs are only told. The release workflow signs bundles, publishes
+      `latest.json`, and refuses to publish a release whose manifest is incomplete.
 - [x] **Renamed to Yardsort** (v0.2.0): the Switchyard name was taken everywhere that matters — see
       open question 14. Existing users' data is carried over on first launch.
 - [x] AUR package `yardsort-bin`: rendered, test-built and published by the release workflow.

@@ -33,6 +33,9 @@ pub struct GeneralSettings {
     /// Send a desktop notification when an agent that was busy for a while goes quiet and
     /// nobody is looking at it.
     pub notify_when_quiet: bool,
+    /// Look for a newer release shortly after starting and once a day. Looking is all it does:
+    /// nothing is downloaded or installed until the user says so.
+    pub check_for_updates: bool,
 }
 
 impl Default for GeneralSettings {
@@ -40,6 +43,7 @@ impl Default for GeneralSettings {
         Self {
             editor_command: None,
             notify_when_quiet: true,
+            check_for_updates: true,
         }
     }
 }
