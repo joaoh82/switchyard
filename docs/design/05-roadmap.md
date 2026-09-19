@@ -145,7 +145,8 @@ Done:
 
 To do:
 
-- [ ] Set the Apple signing secrets and cut **v0.1.0**.
+- [x] **v0.1.0 released** (2026-09-19): first public release, built by the release workflow on its
+      first run. The macOS build is signed with a Developer ID certificate and notarized by Apple.
 - [ ] Hands-on pass and benchmark rows on macOS and Windows hardware.
 - [ ] Auto-update (Tauri updater): needs an update-signing key whose private half must be kept
       safe forever — losing it strands every installed copy — so it is a deliberate step.
