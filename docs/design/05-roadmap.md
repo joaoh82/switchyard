@@ -152,7 +152,11 @@ To do:
       safe forever — losing it strands every installed copy — so it is a deliberate step.
 - [x] **Renamed to Yardsort** (v0.2.0): the Switchyard name was taken everywhere that matters — see
       open question 14. Existing users' data is carried over on first launch.
-- [x] AUR package `yardsort-bin`, rendered, test-built and published by the release workflow.
+- [x] AUR package `yardsort-bin`: rendered, test-built and published by the release workflow.
+- [ ] **First AUR publish — blocked upstream.** The AUR paused new account registration on
+      2026-09-19, and a maintainer account is needed to register the deploy key. Everything else
+      is in place (the `AUR_SSH_PRIVATE_KEY` secret is set); once an account exists, register the
+      public key and re-run the _Publish to the AUR_ job of the latest release.
 - [ ] Other package managers: Homebrew cask, winget; Flatpak.
 - [ ] Windows code signing, if funding appears.
 - [ ] First-run experience: detect missing git / no agents installed and say what to do.
