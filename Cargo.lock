@@ -3154,7 +3154,7 @@ dependencies = [
 
 [[package]]
 name = "pty-host"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "portable-pty",
  "serde",
@@ -5866,7 +5866,7 @@ checksum = "ea6fc2961e4ef194dcbfe56bb845534d0dc8098940c7e5c012a258bfec6701bd"
 
 [[package]]
 name = "yardsort"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "dunce",
  "ignore",
