@@ -153,6 +153,8 @@ To do:
       warning about running terminals. AppImage, macOS and Windows copies update themselves;
       package-manager installs are only told. The release workflow signs bundles, publishes
       `latest.json`, and refuses to publish a release whose manifest is incomplete.
+      Proven end to end on 2026-09-19: a released 0.3.0 AppImage found 0.3.1, installed it on
+      request, replaced its own file and came back as 0.3.1.
 - [x] **Renamed to Yardsort** (v0.2.0): the Switchyard name was taken everywhere that matters — see
       open question 14. Existing users' data is carried over on first launch.
 - [x] AUR package `yardsort-bin`: rendered, test-built and published by the release workflow.
